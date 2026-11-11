@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import {
-  ArrowLeft,
   Clock,
   MapPin,
   MessageCircle,
@@ -21,8 +20,6 @@ interface StorefrontViewProps {
   categories: Category[];
   products: Product[];
   loading: boolean;
-  onBackToDirectory: () => void;
-  onOpenAuth: () => void;
   canManageStore: boolean;
   onOpenStoreAdmin: () => void;
 }
@@ -40,8 +37,6 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({
   categories,
   products,
   loading,
-  onBackToDirectory,
-  onOpenAuth,
   canManageStore,
   onOpenStoreAdmin,
 }) => {
@@ -182,16 +177,16 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({
       {/* Compact Store Top Bar */}
       <header className="sticky top-0 z-30 border-b border-zinc-200/80 bg-white/95 backdrop-blur-sm">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              type="button"
-              onClick={onBackToDirectory}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700 hover:bg-zinc-50 shrink-0 cursor-pointer"
-              title="Volver al directorio NEXO+"
-              aria-label="Volver al directorio"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </button>
+          <div className="flex items-center gap-2.5 min-w-0">
+            {store.logoUrl && (
+              <div className="h-8 w-8 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-white">
+                <ResilientImage
+                  src={store.logoUrl}
+                  alt={store.name}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            )}
             <span className="truncate font-display text-base font-bold tracking-tight text-zinc-900">
               {store.name}
             </span>
@@ -199,21 +194,13 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({
 
           <div className="flex items-center gap-2.5 shrink-0">
             <PWAInstallButton storeName={store.name} variant="outline" />
-            {canManageStore ? (
+            {canManageStore && (
               <button
                 type="button"
                 onClick={onOpenStoreAdmin}
                 className="hidden sm:inline-flex rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-xs font-medium text-zinc-800 hover:bg-zinc-50 whitespace-nowrap cursor-pointer"
               >
                 Administrar tienda
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={onOpenAuth}
-                className="hidden sm:inline-flex rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50 whitespace-nowrap cursor-pointer"
-              >
-                Soy comercio
               </button>
             )}
 

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import type { Store } from '../types';
 
-export function useDynamicStoreManifest(store: Store | null) {
+export function useDynamicStoreManifest(store: Store | null, routeSlug?: string | null) {
   useEffect(() => {
     let cancelled = false;
     const appleIcon = document.getElementById('link-apple-icon') as HTMLLinkElement | null;
@@ -15,7 +15,9 @@ export function useDynamicStoreManifest(store: Store | null) {
       document.head.appendChild(manifestLink);
     }
 
-    if (!store) {
+    const effectiveSlug = store?.slug || routeSlug || null;
+
+    if (!effectiveSlug) {
       document.title = 'NEXO+ Tiendas Online';
       manifestLink.href = '/manifest.webmanifest';
       if (appleIcon) appleIcon.href = '/apple-touch-icon.png';
@@ -24,27 +26,29 @@ export function useDynamicStoreManifest(store: Store | null) {
       return;
     }
 
-    document.title = `${store.name} · Catálogo Online`;
-    const iconUrl = store.appIconUrl || store.logoUrl || '';
+    if (store) {
+      document.title = `${store.name} · Catálogo Online`;
+      const iconUrl = store.appIconUrl || store.logoUrl || '';
+      if (appleIcon) {
+        appleIcon.href = iconUrl || '/apple-touch-icon.png';
+      }
+      if (themeMeta) {
+        themeMeta.content = store.accentColor || '#0F172A';
+      }
+      if (appleTitle) {
+        appleTitle.content = store.name.slice(0, 12);
+      }
+    }
+
     const params = new URLSearchParams();
-    params.set('name', store.name);
+    if (store?.name) params.set('name', store.name);
+    const iconUrl = store?.appIconUrl || store?.logoUrl || '';
     if (iconUrl && iconUrl.startsWith('http')) params.set('icon', iconUrl);
-    if (store.accentColor) params.set('theme', store.accentColor);
+    if (store?.accentColor) params.set('theme', store.accentColor);
 
-    if (appleIcon) {
-      appleIcon.href = iconUrl || '/apple-touch-icon.png';
-    }
-    if (themeMeta) {
-      themeMeta.content = store.accentColor || '#0F172A';
-    }
-    if (appleTitle) {
-      appleTitle.content = store.name.slice(0, 12);
-    }
+    const qs = params.toString();
+    const dynamicManifestUrl = `/api/manifest/${encodeURIComponent(effectiveSlug)}${qs ? `?${qs}` : ''}`;
 
-    const dynamicManifestUrl = `/api/manifest/${encodeURIComponent(store.slug)}?${params.toString()}`;
-
-    // Verify dynamic manifest endpoint returns valid JSON before pointing <link rel="manifest"> to it
-    // so static deployments never end up with a 404 manifest that blocks PWA installation.
     fetch(dynamicManifestUrl, { headers: { Accept: 'application/manifest+json, application/json' } })
       .then(async (res) => {
         if (cancelled || !res.ok) return;
@@ -61,5 +65,5 @@ export function useDynamicStoreManifest(store: Store | null) {
     return () => {
       cancelled = true;
     };
-  }, [store]);
+  }, [store, routeSlug]);
 }

@@ -240,7 +240,10 @@ function AppContent() {
   }, [route, publicStores]);
 
   // Dynamic PWA manifest for active storefront
-  useDynamicStoreManifest(activeStorefront);
+  useDynamicStoreManifest(
+    activeStorefront,
+    route.view === 'storefront' ? route.slug : null
+  );
 
   // Load categories & products for active storefront
   useEffect(() => {
@@ -442,8 +445,6 @@ function AppContent() {
         categories={storeCategories}
         products={storeProducts}
         loading={loadingStoreCatalog}
-        onBackToDirectory={navigateToDirectory}
-        onOpenAuth={() => setRoute({ view: 'auth' })}
         canManageStore={canManage}
         onOpenStoreAdmin={() => {
           if (isMasterAdmin) {
