@@ -84,9 +84,8 @@ function slugifyStoreName(input: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, 48);
-  const suffix = crypto.randomBytes(2).toString('hex');
-  return `${base || 'tienda'}-${suffix}`;
+    .slice(0, 60);
+  return base || 'tienda';
 }
 
 function toCloudinarySizedIcon(url: string, size: number): string {
@@ -292,12 +291,14 @@ async function startServer() {
 
     const body = (req.body || {}) as {
       name?: string;
+      slug?: string;
       email?: string;
       whatsapp?: string;
       tempPassword?: string;
     };
 
     const name = (body.name || '').trim();
+    const requestedSlug = body.slug ? slugifyStoreName(body.slug) : '';
     const email = (body.email || '').trim().toLowerCase();
     const whatsapp = (body.whatsapp || '').replace(/[^\d]/g, '').trim();
     const tempPassword = body.tempPassword || '';
@@ -379,7 +380,7 @@ async function startServer() {
         ).catch(() => undefined);
       }
 
-      const slug = slugifyStoreName(name);
+      const slug = requestedSlug.length >= 2 ? requestedSlug : slugifyStoreName(name);
       res.json({
         uid: signUpData.localId,
         email,

@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Copy,
   ExternalLink,
+  Link2,
   Loader2,
   LogOut,
   Plus,
@@ -22,6 +23,7 @@ import {
   Settings2,
   ShieldCheck,
   Store as StoreIcon,
+  X,
 } from 'lucide-react';
 import { auth, db, firebaseApiKey, handleFirestoreError } from '../lib/firebase';
 import { OperationType, type Store, type StoreAccount } from '../types';
@@ -33,13 +35,13 @@ function createSlugFromName(input: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, 48);
-  const suffix = Math.random().toString(16).slice(2, 6);
-  return `${base || 'tienda'}-${suffix}`;
+    .slice(0, 60);
+  return base || 'tienda';
 }
 
 async function createStoreAccountFallback(params: {
   name: string;
+  slug: string;
   email: string;
   whatsapp: string;
   tempPassword: string;
@@ -114,7 +116,7 @@ async function createStoreAccountFallback(params: {
     ).catch(() => undefined);
   }
 
-  const slug = createSlugFromName(cleanName);
+  const slug = createSlugFromName(params.slug || cleanName);
   return {
     uid: signUpData.localId,
     email: cleanEmail,
@@ -139,6 +141,8 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
   onBackToDirectory,
 }) => {
   const [name, setName] = useState('');
+  const [customSlug, setCustomSlug] = useState('');
+  const [slugTouched, setSlugTouched] = useState(false);
   const [email, setEmail] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [tempPassword, setTempPassword] = useState('');
@@ -152,6 +156,12 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
   const [search, setSearch] = useState('');
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [verificationSent, setVerificationSent] = useState(false);
+
+  // Edit existing store slug modal state
+  const [editingSlugStore, setEditingSlugStore] = useState<Store | null>(null);
+  const [editSlugValue, setEditSlugValue] = useState('');
+  const [editSlugError, setEditSlugError] = useState<string | null>(null);
+  const [savingSlug, setSavingSlug] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, 'stores'), orderBy('createdAt', 'desc'));
@@ -199,6 +209,26 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
       return;
     }
 
+    const desiredSlug = createSlugFromName(customSlug || name);
+    if (desiredSlug.length < 2 || !/^[a-z0-9\-]+$/.test(desiredSlug)) {
+      setError('El enlace de la tienda debe tener al menos 2 caracteres (solo letras minúsculas, números y guiones).');
+      return;
+    }
+
+    // Resolve unique slug if already taken
+    let uniqueSlug = desiredSlug;
+    if (stores.some((s) => s.slug === uniqueSlug)) {
+      if (slugTouched) {
+        setError(`El enlace "?store=${uniqueSlug}" ya está ocupado por otra tienda. Elegí otro nombre de enlace.`);
+        return;
+      }
+      let counter = 2;
+      while (stores.some((s) => s.slug === `${desiredSlug}-${counter}`)) {
+        counter += 1;
+      }
+      uniqueSlug = `${desiredSlug}-${counter}`;
+    }
+
     setCreating(true);
     try {
       const idToken = await user.getIdToken();
@@ -224,6 +254,7 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
           },
           body: JSON.stringify({
             name: name.trim(),
+            slug: uniqueSlug,
             email: email.trim(),
             whatsapp: whatsapp.trim(),
             tempPassword,
@@ -263,21 +294,28 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
       if (shouldFallback || !data) {
         data = await createStoreAccountFallback({
           name,
+          slug: uniqueSlug,
           email,
           whatsapp,
           tempPassword,
         });
       }
 
-      if (!data.uid || !data.storeId || !data.slug) {
+      if (!data.uid) {
         throw new Error('No se pudo completar la creación de la cuenta del comercio.');
       }
 
-      const storePath = `stores/${data.storeId}`;
+      const finalSlug = uniqueSlug;
+      let finalStoreId = finalSlug;
+      if (stores.some((s) => s.id === finalStoreId)) {
+        finalStoreId = `${finalSlug}-${Math.random().toString(16).slice(2, 6)}`;
+      }
+
+      const storePath = `stores/${finalStoreId}`;
       try {
-        await setDoc(doc(db, 'stores', data.storeId), {
-          id: data.storeId,
-          slug: data.slug,
+        await setDoc(doc(db, 'stores', finalStoreId), {
+          id: finalStoreId,
+          slug: finalSlug,
           name: data.name || name.trim(),
           description: 'Catálogo online y pedidos por WhatsApp.',
           whatsapp: data.whatsapp || whatsapp.replace(/[^\d]/g, ''),
@@ -296,10 +334,10 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
         handleFirestoreError(fsErr, OperationType.CREATE, storePath);
       }
 
-      const accountPath = `storeAccounts/${data.storeId}`;
+      const accountPath = `storeAccounts/${finalStoreId}`;
       try {
-        await setDoc(doc(db, 'storeAccounts', data.storeId), {
-          storeId: data.storeId,
+        await setDoc(doc(db, 'storeAccounts', finalStoreId), {
+          storeId: finalStoreId,
           ownerUid: data.uid,
           ownerEmail: data.email || email.trim().toLowerCase(),
           createdAt: serverTimestamp(),
@@ -309,11 +347,11 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
       }
 
       const defaultCatId = 'general';
-      const catPath = `stores/${data.storeId}/categories/${defaultCatId}`;
+      const catPath = `stores/${finalStoreId}/categories/${defaultCatId}`;
       try {
-        await setDoc(doc(db, 'stores', data.storeId, 'categories', defaultCatId), {
+        await setDoc(doc(db, 'stores', finalStoreId, 'categories', defaultCatId), {
           id: defaultCatId,
-          storeId: data.storeId,
+          storeId: finalStoreId,
           ownerUid: data.uid,
           name: 'General',
           description: 'Productos principales del catálogo.',
@@ -327,9 +365,11 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
       }
 
       setSuccessMsg(
-        `Comercio "${data.name}" creado correctamente. El titular ya puede ingresar con ${data.email}.`
+        `Comercio "${data.name}" creado correctamente (?store=${finalSlug}). El titular ya puede ingresar con ${data.email}.`
       );
       setName('');
+      setCustomSlug('');
+      setSlugTouched(false);
       setEmail('');
       setWhatsapp('');
       setTempPassword('');
@@ -360,6 +400,41 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
       setTimeout(() => setCopiedSlug(null), 2000);
     } catch {
       // Fallback ignored
+    }
+  };
+
+  const openEditSlugModal = (store: Store) => {
+    setEditingSlugStore(store);
+    setEditSlugValue(store.slug);
+    setEditSlugError(null);
+  };
+
+  const handleSaveEditedSlug = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSlugStore) return;
+    const clean = createSlugFromName(editSlugValue);
+    if (clean.length < 2 || clean.length > 80 || !/^[a-z0-9\-]+$/.test(clean)) {
+      setEditSlugError('El enlace debe tener al menos 2 caracteres (solo letras minúsculas, números y guiones).');
+      return;
+    }
+    const conflict = stores.find((s) => s.slug === clean && s.id !== editingSlugStore.id);
+    if (conflict) {
+      setEditSlugError(`Ese enlace ya pertenece al comercio "${conflict.name}".`);
+      return;
+    }
+    setSavingSlug(true);
+    setEditSlugError(null);
+    const path = `stores/${editingSlugStore.id}`;
+    try {
+      await updateDoc(doc(db, 'stores', editingSlugStore.id), {
+        slug: clean,
+        updatedAt: serverTimestamp(),
+      });
+      setEditingSlugStore(null);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, path);
+    } finally {
+      setSavingSlug(false);
     }
   };
 
@@ -505,10 +580,45 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
                     minLength={2}
                     maxLength={100}
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setName(val);
+                      if (!slugTouched) {
+                        setCustomSlug(val.trim() ? createSlugFromName(val) : '');
+                      }
+                    }}
                     placeholder="Ej.: Tienda Demo"
                     className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-800">
+                    Enlace de la tienda (URL)
+                  </label>
+                  <div className="mt-1.5 flex items-center overflow-hidden rounded-lg border border-zinc-300 bg-white focus-within:border-zinc-900">
+                    <span className="border-r border-zinc-200 bg-zinc-50 px-2.5 py-2.5 font-mono text-xs text-zinc-500 whitespace-nowrap">
+                      /?store=
+                    </span>
+                    <input
+                      type="text"
+                      required
+                      minLength={2}
+                      maxLength={80}
+                      value={customSlug}
+                      onChange={(e) => {
+                        setSlugTouched(true);
+                        setCustomSlug(
+                          e.target.value
+                            .toLowerCase()
+                            .replace(/[^a-z0-9\-]/g, '-')
+                            .replace(/-+/g, '-')
+                        );
+                      }}
+                      placeholder="tienda-demo"
+                      className="w-full px-3 py-2.5 font-mono text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -637,7 +747,11 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
                           <h3 className="mt-0.5 truncate font-display text-sm font-semibold text-zinc-900">
                             {store.name}
                           </h3>
-                          <p className="truncate text-xs text-zinc-500">{ownerEmail}</p>
+                          <p className="truncate text-xs text-zinc-500">
+                            <span>{ownerEmail}</span>
+                            <span aria-hidden="true"> · </span>
+                            <span className="font-mono text-zinc-700">?store={store.slug}</span>
+                          </p>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -647,6 +761,16 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
                             className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 cursor-pointer"
                           >
                             {store.isActive ? 'Pausar' : 'Activar'}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => openEditSlugModal(store)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 cursor-pointer"
+                            title="Modificar URL de la tienda"
+                          >
+                            <Link2 className="h-3 w-3" />
+                            <span>Editar URL</span>
                           </button>
 
                           <button
@@ -686,6 +810,93 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
           </section>
         </div>
       </main>
+
+      {editingSlugStore && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/60 p-4 backdrop-blur-xs"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+              <div>
+                <h2 className="font-display text-base font-bold text-zinc-900">
+                  Modificar enlace de {editingSlugStore.name}
+                </h2>
+                <p className="text-xs text-zinc-500">
+                  Personalizá la URL pública sin afectar tus productos ni categorías.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingSlugStore(null)}
+                className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditedSlug} className="mt-4 space-y-4">
+              {editSlugError && (
+                <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                  <span>{editSlugError}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-800">
+                  Nuevo identificador de enlace
+                </label>
+                <div className="mt-1.5 flex items-center overflow-hidden rounded-lg border border-zinc-300 bg-white focus-within:border-zinc-900">
+                  <span className="border-r border-zinc-200 bg-zinc-50 px-2.5 py-2.5 font-mono text-xs text-zinc-500 whitespace-nowrap">
+                    /?store=
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    minLength={2}
+                    maxLength={80}
+                    value={editSlugValue}
+                    onChange={(e) => {
+                      setEditSlugError(null);
+                      setEditSlugValue(
+                        e.target.value
+                          .toLowerCase()
+                          .replace(/[^a-z0-9\-]/g, '-')
+                          .replace(/-+/g, '-')
+                      );
+                    }}
+                    placeholder="tienda-demo"
+                    className="w-full px-3 py-2.5 font-mono text-xs text-zinc-900 focus:outline-none"
+                  />
+                </div>
+                <p className="mt-1.5 text-[11px] text-zinc-500">
+                  Vista previa: <span className="font-mono text-zinc-800">{window.location.origin}/?store={createSlugFromName(editSlugValue || 'tienda')}</span>
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2.5 border-t border-zinc-100 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setEditingSlugStore(null)}
+                  className="rounded-lg border border-zinc-200 px-4 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingSlug}
+                  className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-5 py-2 text-xs font-semibold text-white hover:bg-zinc-800 disabled:opacity-60 cursor-pointer"
+                >
+                  {savingSlug && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  <span>Guardar enlace</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
