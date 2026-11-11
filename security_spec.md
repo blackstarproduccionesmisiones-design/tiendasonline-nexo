@@ -1,7 +1,7 @@
 # NEXO+ Security Specification
 
 ## 1. Data Invariants
-1. **Master Admin Governance**: Only verified master administrators (`nexodigitalposadas@gmail.com`, `blackstarproducciones.misiones@gmail.com`, or listed in `/admins/{uid}`) may create or deactivate stores or read all private `storeAccounts`.
+1. **Master Admin Governance**: Only the verified master administrator (`nexodigitalposadas@gmail.com`) may create or deactivate stores or read all private `storeAccounts`.
 2. **Store Ownership Gate**: Every `Category` and `Product` under `/stores/{storeId}` must reference an existing parent store, and its `ownerUid` must equal the parent store's `ownerUid`. Only that store owner or a master admin can mutate them.
 3. **PII Isolation**: Owner login emails are isolated in `/storeAccounts/{storeId}` and never exposed in `/stores/{storeId}` public reads.
 4. **Availability Enforcement**: Public shoppers can list/get categories and products only when `isAvailable == true`. Store owners and master admins can read all items regardless of `isAvailable`.

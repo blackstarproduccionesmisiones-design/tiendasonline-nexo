@@ -11,7 +11,6 @@ export const googleProvider = new GoogleAuthProvider();
 
 export const MASTER_ADMIN_EMAILS = [
   'nexodigitalposadas@gmail.com',
-  'blackstarproducciones.misiones@gmail.com',
 ];
 
 export function isMasterAdminEmail(email?: string | null): boolean {

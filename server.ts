@@ -24,7 +24,6 @@ const firebaseConfig: FirebaseAppletConfig = JSON.parse(
 
 const MASTER_ADMIN_EMAILS = new Set([
   'nexodigitalposadas@gmail.com',
-  'blackstarproducciones.misiones@gmail.com',
 ]);
 
 const upload = multer({
