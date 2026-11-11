@@ -169,8 +169,14 @@ async function startServer() {
   });
 
   app.get('/api/cloudinary/status', (_req: Request, res: Response) => {
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim() || '';
-    const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET?.trim() || '';
+    const cloudName =
+      process.env.CLOUDINARY_CLOUD_NAME?.trim() ||
+      process.env.VITE_CLOUDINARY_CLOUD_NAME?.trim() ||
+      '';
+    const uploadPreset =
+      process.env.CLOUDINARY_UPLOAD_PRESET?.trim() ||
+      process.env.VITE_CLOUDINARY_UPLOAD_PRESET?.trim() ||
+      '';
     const apiKey = process.env.CLOUDINARY_API_KEY?.trim() || '';
     const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim() || '';
 
@@ -191,8 +197,14 @@ async function startServer() {
       return;
     }
 
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim() || '';
-    const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET?.trim() || '';
+    const cloudName =
+      process.env.CLOUDINARY_CLOUD_NAME?.trim() ||
+      process.env.VITE_CLOUDINARY_CLOUD_NAME?.trim() ||
+      '';
+    const uploadPreset =
+      process.env.CLOUDINARY_UPLOAD_PRESET?.trim() ||
+      process.env.VITE_CLOUDINARY_UPLOAD_PRESET?.trim() ||
+      '';
     const apiKey = process.env.CLOUDINARY_API_KEY?.trim() || '';
     const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim() || '';
 
@@ -200,7 +212,7 @@ async function startServer() {
       res.status(503).json({
         error: 'CLOUDINARY_NOT_CONFIGURED',
         message:
-          'Cloudinary no está configurado en el servidor. Configurá CLOUDINARY_CLOUD_NAME y CLOUDINARY_UPLOAD_PRESET (o API Key/Secret) en Secrets, o pegá una URL de imagen directamente.',
+          'Cloudinary no está configurado en el servidor. Configurá CLOUDINARY_CLOUD_NAME y CLOUDINARY_UPLOAD_PRESET (o API Key/Secret) en Secrets, o guardalos en Panel maestro NEXO+.',
       });
       return;
     }

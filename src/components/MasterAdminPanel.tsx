@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
@@ -15,6 +16,7 @@ import {
   CheckCircle2,
   Copy,
   ExternalLink,
+  Image as ImageIcon,
   Link2,
   Loader2,
   LogOut,
@@ -163,6 +165,13 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
   const [editSlugError, setEditSlugError] = useState<string | null>(null);
   const [savingSlug, setSavingSlug] = useState(false);
 
+  // Cloudinary platform configuration state
+  const [cloudName, setCloudName] = useState('');
+  const [uploadPreset, setUploadPreset] = useState('');
+  const [savingCloudinary, setSavingCloudinary] = useState(false);
+  const [cloudinaryMsg, setCloudinaryMsg] = useState<string | null>(null);
+  const [cloudinaryErr, setCloudinaryErr] = useState<string | null>(null);
+
   useEffect(() => {
     const q = query(collection(db, 'stores'), orderBy('createdAt', 'desc'));
     const unsubStores = onSnapshot(
@@ -192,6 +201,16 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
         handleFirestoreError(err, OperationType.LIST, 'storeAccounts');
       }
     );
+
+    getDoc(doc(db, 'platformConfig', 'cloudinary'))
+      .then((snap) => {
+        if (snap.exists()) {
+          const data = snap.data() as { cloudName?: string; uploadPreset?: string };
+          setCloudName(data.cloudName || '');
+          setUploadPreset(data.uploadPreset || '');
+        }
+      })
+      .catch(() => undefined);
 
     return () => {
       unsubStores();
@@ -438,6 +457,40 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
     }
   };
 
+  const handleSaveCloudinary = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCloudinaryMsg(null);
+    setCloudinaryErr(null);
+
+    const cleanCloud = cloudName.trim();
+    const cleanPreset = uploadPreset.trim();
+
+    if (!/^[a-zA-Z0-9_\-]+$/.test(cleanCloud) || cleanCloud.length > 100) {
+      setCloudinaryErr('El Cloud Name solo puede contener letras, números, guiones y guiones bajos.');
+      return;
+    }
+    if (cleanPreset.length < 1 || cleanPreset.length > 100) {
+      setCloudinaryErr('Ingresá el nombre del Upload Preset (modo Unsigned) de Cloudinary.');
+      return;
+    }
+
+    setSavingCloudinary(true);
+    const path = 'platformConfig/cloudinary';
+    try {
+      await setDoc(doc(db, 'platformConfig', 'cloudinary'), {
+        id: 'cloudinary',
+        cloudName: cleanCloud,
+        uploadPreset: cleanPreset,
+        updatedAt: serverTimestamp(),
+      });
+      setCloudinaryMsg('Configuración de Cloudinary guardada. Todos los comercios ya pueden subir imágenes desde su dispositivo.');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, path);
+    } finally {
+      setSavingCloudinary(false);
+    }
+  };
+
   const filteredStores = stores.filter((s) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
@@ -675,6 +728,79 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
                     <Plus className="h-4 w-4" />
                   )}
                   <span>Crear cuenta de comercio</span>
+                </button>
+              </form>
+            </div>
+
+            {/* Cloudinary Platform Configuration */}
+            <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-6">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-700">
+                  <ImageIcon className="h-4 w-4" />
+                </div>
+                <div>
+                  <h2 className="font-display text-base font-bold text-zinc-900">
+                    Configuración de Cloudinary
+                  </h2>
+                  <p className="mt-0.5 text-xs leading-relaxed text-zinc-600">
+                    Habilitá la subida de fotos desde el dispositivo (productos, portadas, logos e íconos) para todos los comercios.
+                  </p>
+                </div>
+              </div>
+
+              {cloudinaryErr && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                  <span>{cloudinaryErr}</span>
+                </div>
+              )}
+
+              {cloudinaryMsg && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
+                  <span>{cloudinaryMsg}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveCloudinary} className="mt-4 space-y-3.5">
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-800">
+                    Cloud Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={cloudName}
+                    onChange={(e) => setCloudName(e.target.value)}
+                    placeholder="Ej.: mi-cloud-name"
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-800">
+                    Upload Preset (Unsigned)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={uploadPreset}
+                    onChange={(e) => setUploadPreset(e.target.value)}
+                    placeholder="Ej.: nexo_unsigned"
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none"
+                  />
+                  <p className="mt-1 text-[11px] text-zinc-500">
+                    En Cloudinary: Settings → Upload → Add upload preset → Signing Mode: <strong>Unsigned</strong>.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={savingCloudinary}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-zinc-50 py-2 text-xs font-semibold text-zinc-900 hover:bg-zinc-100 disabled:opacity-60 cursor-pointer"
+                >
+                  {savingCloudinary && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  <span>Guardar configuración de imágenes</span>
                 </button>
               </form>
             </div>

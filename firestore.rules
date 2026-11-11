@@ -103,10 +103,37 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function isValidCloudinaryConfig(data, configId) {
+      return data.keys().hasAll(['id', 'cloudName', 'uploadPreset', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'cloudName', 'uploadPreset', 'updatedAt'])
+        && data.id == configId
+        && isValidId(data.id)
+        && data.cloudName is string && data.cloudName.size() >= 1 && data.cloudName.size() <= 100 && data.cloudName.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.uploadPreset is string && data.uploadPreset.size() >= 1 && data.uploadPreset.size() <= 100
+        && data.updatedAt is timestamp;
+    }
+
     match /admins/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId || isAdminEmail());
       allow list: if isAdminEmail();
       allow create, update, delete: if isAdminEmail() && isValidId(userId);
+    }
+
+    match /platformConfig/{configId} {
+      allow get: if isValidId(configId) && configId == 'cloudinary' && isSignedIn();
+      allow create: if isAdmin()
+        && isValidId(configId)
+        && configId == 'cloudinary'
+        && isValidCloudinaryConfig(incoming(), configId)
+        && incoming().updatedAt == request.time;
+      allow update: if isAdmin()
+        && isValidId(configId)
+        && configId == 'cloudinary'
+        && isValidCloudinaryConfig(incoming(), configId)
+        && incoming().id == existing().id
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['cloudName', 'uploadPreset', 'updatedAt']);
+      allow delete: if isAdmin() && isValidId(configId) && configId == 'cloudinary';
     }
 
     match /stores/{storeId} {

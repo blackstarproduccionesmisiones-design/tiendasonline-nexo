@@ -83,12 +83,28 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "storeId", "ownerUid", "categoryId", "name", "price", "isAvailable", "createdAt", "updatedAt"]
+    },
+    "CloudinaryConfig": {
+      "title": "CloudinaryConfig",
+      "description": "Public unsigned Cloudinary upload parameters (cloudName and unsigned uploadPreset) managed by Master Admin.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "cloudName": { "type": "string", "minLength": 1, "maxLength": 100, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "uploadPreset": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "cloudName", "uploadPreset", "updatedAt"]
     }
   },
   "firestore": {
     "/admins/{userId}": {
       "schema": { "$ref": "#/entities/AdminUser" },
       "description": "Master administrator authorization records."
+    },
+    "/platformConfig/{configId}": {
+      "schema": { "$ref": "#/entities/CloudinaryConfig" },
+      "description": "Platform-wide public upload configuration managed by master administrator."
     },
     "/stores/{storeId}": {
       "schema": { "$ref": "#/entities/Store" },
