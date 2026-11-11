@@ -1,4 +1,5 @@
-import { getFirebaseConfig } from '../_firebase';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { getFirebaseConfig } from '../_firebase.js';
 
 interface FirestoreFieldVal {
   stringValue?: string;
@@ -30,7 +31,6 @@ async function fetchStoreForManifest(slug: string): Promise<{
   const dbId = firebaseConfig.firestoreDatabaseId || '(default)';
 
   try {
-    // Try direct document GET first (fast and works with public allow get when isActive == true)
     const docUrl = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(
       firebaseConfig.projectId
     )}/databases/${encodeURIComponent(dbId)}/documents/stores/${encodeURIComponent(
@@ -105,12 +105,17 @@ async function fetchStoreForManifest(slug: string): Promise<{
   }
 }
 
-export async function GET(request: Request): Promise<Response> {
-  const url = new URL(request.url);
-  const pathPart = url.pathname.split('/').pop() || '';
+export default async function handler(
+  req: IncomingMessage & { query?: Record<string, string | string[] | undefined> },
+  res: ServerResponse
+): Promise<void> {
+  const url = new URL(req.url || '/', 'https://nexo.local');
+  const querySlug = typeof req.query?.slug === 'string' ? req.query.slug : '';
+  const pathPart = querySlug || url.pathname.split('/').pop() || '';
   const rawSlug = decodeURIComponent(pathPart)
     .replace(/[^a-z0-9\-]/gi, '')
     .toLowerCase();
+
   const store = rawSlug ? await fetchStoreForManifest(rawSlug) : null;
 
   const qName = url.searchParams.get('name');
@@ -119,8 +124,7 @@ export async function GET(request: Request): Promise<Response> {
 
   const fallbackName =
     qName && qName.trim() ? qName.trim().slice(0, 60) : 'NEXO+ Tienda';
-  const fallbackIcon =
-    qIcon && qIcon.startsWith('http') ? qIcon.trim() : '';
+  const fallbackIcon = qIcon && qIcon.startsWith('http') ? qIcon.trim() : '';
   const fallbackTheme =
     qTheme && /^#[0-9a-fA-F]{6}$/.test(qTheme) ? qTheme : '#0F172A';
 
@@ -175,7 +179,11 @@ export async function GET(request: Request): Promise<Response> {
 
   const startUrl = rawSlug ? `/?store=${encodeURIComponent(rawSlug)}` : '/';
 
-  return new Response(
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.end(
     JSON.stringify({
       id: startUrl,
       name,
@@ -188,14 +196,6 @@ export async function GET(request: Request): Promise<Response> {
       theme_color: themeColor,
       background_color: '#FAFAFA',
       icons,
-    }),
-    {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/manifest+json; charset=utf-8',
-        'Cache-Control': 'no-cache',
-        'Access-Control-Allow-Origin': '*',
-      },
-    }
+    })
   );
 }

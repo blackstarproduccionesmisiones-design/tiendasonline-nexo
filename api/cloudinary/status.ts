@@ -1,12 +1,12 @@
-import { getCloudinaryServerEnv, jsonResponse } from '../_firebase';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { getCloudinaryServerEnv, sendJson } from '../_firebase.js';
 
-export async function GET(): Promise<Response> {
+export default async function handler(_req: IncomingMessage, res: ServerResponse): Promise<void> {
   const { cloudName, uploadPreset, apiKey, apiSecret } = getCloudinaryServerEnv();
-
   const isSigned = Boolean(cloudName && apiKey && apiSecret);
   const isUnsigned = Boolean(cloudName && uploadPreset);
 
-  return jsonResponse({
+  sendJson(res, 200, {
     configured: isSigned || isUnsigned,
     mode: isSigned ? 'signed' : isUnsigned ? 'unsigned' : 'none',
   });

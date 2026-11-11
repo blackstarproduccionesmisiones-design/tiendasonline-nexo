@@ -19,7 +19,9 @@ export function useDynamicStoreManifest(store: Store | null, routeSlug?: string 
 
     if (!effectiveSlug) {
       document.title = 'NEXO+ Tiendas Online';
-      manifestLink.href = '/manifest.webmanifest';
+      if (manifestLink.getAttribute('href') !== '/manifest.webmanifest') {
+        manifestLink.href = '/manifest.webmanifest';
+      }
       if (appleIcon) appleIcon.href = '/apple-touch-icon.png';
       if (themeMeta) themeMeta.content = '#0F172A';
       if (appleTitle) appleTitle.content = 'NEXO+';
@@ -47,19 +49,36 @@ export function useDynamicStoreManifest(store: Store | null, routeSlug?: string 
     if (store?.accentColor) params.set('theme', store.accentColor);
 
     const qs = params.toString();
-    const dynamicManifestUrl = `/api/manifest/${encodeURIComponent(effectiveSlug)}${qs ? `?${qs}` : ''}`;
+    const baseManifestUrl = `/api/manifest/${encodeURIComponent(effectiveSlug)}`;
+    const dynamicManifestUrl = `${baseManifestUrl}${qs ? `?${qs}` : ''}`;
 
     fetch(dynamicManifestUrl, { headers: { Accept: 'application/manifest+json, application/json' } })
       .then(async (res) => {
-        if (cancelled || !res.ok) return;
+        if (cancelled) return;
+        if (!res.ok) {
+          if (manifestLink && manifestLink.getAttribute('href') !== '/manifest.webmanifest') {
+            manifestLink.href = '/manifest.webmanifest';
+          }
+          return;
+        }
         const text = await res.text();
-        const parsed = JSON.parse(text) as { start_url?: string; icons?: unknown[] };
-        if (!cancelled && parsed?.start_url && Array.isArray(parsed.icons) && manifestLink) {
+        const parsed = JSON.parse(text) as { start_url?: string; icons?: unknown[]; name?: string };
+        if (cancelled || !parsed?.start_url || !Array.isArray(parsed.icons) || !manifestLink) {
+          return;
+        }
+        const currentHref = manifestLink.getAttribute('href') || '';
+        // If <head> bootstrap already set /api/manifest/<slug> and server returned valid icons, avoid churning href unnecessarily
+        if (currentHref === baseManifestUrl && (!store || parsed.name === store.name)) {
+          return;
+        }
+        if (currentHref !== dynamicManifestUrl) {
           manifestLink.href = dynamicManifestUrl;
         }
       })
       .catch(() => {
-        // Keep /manifest.webmanifest fallback intact
+        if (!cancelled && manifestLink && manifestLink.getAttribute('href') !== '/manifest.webmanifest') {
+          manifestLink.href = '/manifest.webmanifest';
+        }
       });
 
     return () => {

@@ -1,10 +1,12 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   extractBearerToken,
   getFirebaseConfig,
-  jsonResponse,
   MASTER_ADMIN_EMAILS,
+  readJsonBody,
+  sendJson,
   verifyFirebaseIdToken,
-} from '../_firebase';
+} from '../_firebase.js';
 
 function slugifyStoreName(input: string): string {
   const base = input
@@ -17,71 +19,73 @@ function slugifyStoreName(input: string): string {
   return base || 'tienda';
 }
 
-export async function POST(request: Request): Promise<Response> {
-  const token = extractBearerToken(request);
+export default async function handler(
+  req: IncomingMessage & { body?: unknown },
+  res: ServerResponse
+): Promise<void> {
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { error: 'METHOD_NOT_ALLOWED', message: 'Método no permitido.' });
+    return;
+  }
+
+  const token = extractBearerToken(req);
   const caller = await verifyFirebaseIdToken(token);
 
   if (!caller) {
-    return jsonResponse({ error: 'UNAUTHORIZED', message: 'Debés iniciar sesión para continuar.' }, 401);
+    sendJson(res, 401, { error: 'UNAUTHORIZED', message: 'Debés iniciar sesión para continuar.' });
+    return;
   }
 
   if (!MASTER_ADMIN_EMAILS.has(caller.email) || !caller.emailVerified) {
-    return jsonResponse(
-      {
-        error: 'FORBIDDEN',
-        message:
-          'Solo el administrador maestro verificado (nexodigitalposadas@gmail.com) puede dar de alta comercios.',
-      },
-      403
-    );
+    sendJson(res, 403, {
+      error: 'FORBIDDEN',
+      message:
+        'Solo el administrador maestro verificado (nexodigitalposadas@gmail.com) puede dar de alta comercios.',
+    });
+    return;
   }
 
-  let body: {
+  const body = (await readJsonBody(req)) as {
     name?: string;
     slug?: string;
     email?: string;
     whatsapp?: string;
     tempPassword?: string;
-  } = {};
+  };
 
-  try {
-    body = (await request.json()) as typeof body;
-  } catch {
-    body = {};
-  }
-
-  const name = (body.name || '').trim();
-  const requestedSlug = body.slug ? slugifyStoreName(body.slug) : '';
-  const email = (body.email || '').trim().toLowerCase();
-  const whatsapp = (body.whatsapp || '').replace(/[^\d]/g, '').trim();
-  const tempPassword = body.tempPassword || '';
+  const name = (typeof body.name === 'string' ? body.name : '').trim();
+  const requestedSlug = typeof body.slug === 'string' && body.slug ? slugifyStoreName(body.slug) : '';
+  const email = (typeof body.email === 'string' ? body.email : '').trim().toLowerCase();
+  const whatsapp = (typeof body.whatsapp === 'string' ? body.whatsapp : '').replace(/[^\d]/g, '').trim();
+  const tempPassword = typeof body.tempPassword === 'string' ? body.tempPassword : '';
 
   if (name.length < 2 || name.length > 100) {
-    return jsonResponse(
-      { error: 'INVALID_NAME', message: 'El nombre del comercio debe tener entre 2 y 100 caracteres.' },
-      400
-    );
+    sendJson(res, 400, {
+      error: 'INVALID_NAME',
+      message: 'El nombre del comercio debe tener entre 2 y 100 caracteres.',
+    });
+    return;
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return jsonResponse(
-      { error: 'INVALID_EMAIL', message: 'Ingresá un correo electrónico válido para el comercio.' },
-      400
-    );
+    sendJson(res, 400, {
+      error: 'INVALID_EMAIL',
+      message: 'Ingresá un correo electrónico válido para el comercio.',
+    });
+    return;
   }
   if (whatsapp.length < 6 || whatsapp.length > 20) {
-    return jsonResponse(
-      {
-        error: 'INVALID_WHATSAPP',
-        message: 'Ingresá un número de WhatsApp válido (ej. 5493764000000).',
-      },
-      400
-    );
+    sendJson(res, 400, {
+      error: 'INVALID_WHATSAPP',
+      message: 'Ingresá un número de WhatsApp válido (ej. 5493764000000).',
+    });
+    return;
   }
   if (tempPassword.length < 8) {
-    return jsonResponse(
-      { error: 'WEAK_PASSWORD', message: 'La contraseña temporal debe tener al menos 8 caracteres.' },
-      400
-    );
+    sendJson(res, 400, {
+      error: 'WEAK_PASSWORD',
+      message: 'La contraseña temporal debe tener al menos 8 caracteres.',
+    });
+    return;
   }
 
   const config = getFirebaseConfig();
@@ -110,31 +114,25 @@ export async function POST(request: Request): Promise<Response> {
     if (!signUpRes.ok || !signUpData.localId) {
       const code = signUpData.error?.message || 'AUTH_CREATE_FAILED';
       if (code.includes('EMAIL_EXISTS')) {
-        return jsonResponse(
-          {
-            error: 'EMAIL_EXISTS',
-            message: 'Ya existe una cuenta en Firebase Authentication con ese correo electrónico.',
-          },
-          409
-        );
+        sendJson(res, 409, {
+          error: 'EMAIL_EXISTS',
+          message: 'Ya existe una cuenta en Firebase Authentication con ese correo electrónico.',
+        });
+        return;
       }
       if (code.includes('OPERATION_NOT_ALLOWED')) {
-        return jsonResponse(
-          {
-            error: 'OPERATION_NOT_ALLOWED',
-            message:
-              'Habilitá el proveedor "Correo electrónico/contraseña" en Firebase Console > Authentication > Sign-in method para el proyecto nexo-tiendas-online.',
-          },
-          400
-        );
+        sendJson(res, 400, {
+          error: 'OPERATION_NOT_ALLOWED',
+          message:
+            'Habilitá el proveedor "Correo electrónico/contraseña" en Firebase Console > Authentication > Sign-in method para el proyecto nexo-tiendas-online.',
+        });
+        return;
       }
-      return jsonResponse(
-        {
-          error: code,
-          message: `No se pudo crear la cuenta del comercio (${code}).`,
-        },
-        400
-      );
+      sendJson(res, 400, {
+        error: code,
+        message: `No se pudo crear la cuenta del comercio (${code}).`,
+      });
+      return;
     }
 
     if (signUpData.idToken) {
@@ -153,7 +151,7 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const slug = requestedSlug.length >= 2 ? requestedSlug : slugifyStoreName(name);
-    return jsonResponse({
+    sendJson(res, 200, {
       uid: signUpData.localId,
       email,
       name,
@@ -162,12 +160,9 @@ export async function POST(request: Request): Promise<Response> {
       storeId: slug,
     });
   } catch (err) {
-    return jsonResponse(
-      {
-        error: 'SERVER_ERROR',
-        message: err instanceof Error ? err.message : 'Error interno al crear el comercio.',
-      },
-      500
-    );
+    sendJson(res, 500, {
+      error: 'SERVER_ERROR',
+      message: err instanceof Error ? err.message : 'Error interno al crear el comercio.',
+    });
   }
 }

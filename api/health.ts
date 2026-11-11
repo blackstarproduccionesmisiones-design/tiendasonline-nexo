@@ -1,6 +1,7 @@
-import { getFirebaseConfig, jsonResponse } from './_firebase';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { getFirebaseConfig, sendJson } from './_firebase.js';
 
-export async function GET(): Promise<Response> {
+export default async function handler(_req: IncomingMessage, res: ServerResponse): Promise<void> {
   const config = getFirebaseConfig();
-  return jsonResponse({ ok: true, projectId: config.projectId });
+  sendJson(res, 200, { ok: true, projectId: config.projectId });
 }
