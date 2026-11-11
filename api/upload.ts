@@ -1,5 +1,10 @@
 import crypto from 'node:crypto';
-import { extractBearerToken, jsonResponse, verifyFirebaseIdToken } from './_firebase';
+import {
+  extractBearerToken,
+  getCloudinaryServerEnv,
+  jsonResponse,
+  verifyFirebaseIdToken,
+} from './_firebase';
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 
@@ -10,16 +15,7 @@ export async function POST(request: Request): Promise<Response> {
     return jsonResponse({ error: 'UNAUTHORIZED', message: 'Sesión inválida o expirada.' }, 401);
   }
 
-  const cloudName =
-    process.env.CLOUDINARY_CLOUD_NAME?.trim() ||
-    process.env.VITE_CLOUDINARY_CLOUD_NAME?.trim() ||
-    '';
-  const uploadPreset =
-    process.env.CLOUDINARY_UPLOAD_PRESET?.trim() ||
-    process.env.VITE_CLOUDINARY_UPLOAD_PRESET?.trim() ||
-    '';
-  const apiKey = process.env.CLOUDINARY_API_KEY?.trim() || '';
-  const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim() || '';
+  const { cloudName, uploadPreset, apiKey, apiSecret } = getCloudinaryServerEnv();
 
   if (!cloudName || (!uploadPreset && !(apiKey && apiSecret))) {
     return jsonResponse(

@@ -1,5 +1,4 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import firebaseConfigJson from '../firebase-applet-config.json';
 
 export interface FirebaseAppletConfig {
   projectId: string;
@@ -20,13 +19,8 @@ export interface VerifiedTokenUser {
 
 export const MASTER_ADMIN_EMAILS = new Set(['nexodigitalposadas@gmail.com']);
 
-let cachedConfig: FirebaseAppletConfig | null = null;
-
 export function getFirebaseConfig(): FirebaseAppletConfig {
-  if (cachedConfig) return cachedConfig;
-  const configPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
-  cachedConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as FirebaseAppletConfig;
-  return cachedConfig;
+  return firebaseConfigJson as FirebaseAppletConfig;
 }
 
 export function extractBearerToken(request: Request): string {
@@ -67,6 +61,36 @@ export async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedTo
   } catch {
     return null;
   }
+}
+
+export interface ServerCloudinaryEnv {
+  cloudName: string;
+  uploadPreset: string;
+  apiKey: string;
+  apiSecret: string;
+}
+
+export function getCloudinaryServerEnv(): ServerCloudinaryEnv {
+  return {
+    cloudName:
+      process.env.CLOUDINARY_CLOUD_NAME?.trim() ||
+      process.env.NOMBRE_DE_LA_NUBE_CLOUDINARY?.trim() ||
+      process.env.VITE_CLOUDINARY_CLOUD_NAME?.trim() ||
+      '',
+    uploadPreset:
+      process.env.CLOUDINARY_UPLOAD_PRESET?.trim() ||
+      process.env.PREAJUSTE_DE_SUBIDA_CLOUDINARY?.trim() ||
+      process.env.VITE_CLOUDINARY_UPLOAD_PRESET?.trim() ||
+      '',
+    apiKey:
+      process.env.CLOUDINARY_API_KEY?.trim() ||
+      process.env.CLAVE_API_DE_CLOUDINARY?.trim() ||
+      '',
+    apiSecret:
+      process.env.CLOUDINARY_API_SECRET?.trim() ||
+      process.env.SECRETO_API_DE_CLOUDINARY?.trim() ||
+      '',
+  };
 }
 
 export function jsonResponse(data: unknown, status = 200): Response {

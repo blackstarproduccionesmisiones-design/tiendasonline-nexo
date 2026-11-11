@@ -171,14 +171,22 @@ async function startServer() {
   app.get('/api/cloudinary/status', (_req: Request, res: Response) => {
     const cloudName =
       process.env.CLOUDINARY_CLOUD_NAME?.trim() ||
+      process.env.NOMBRE_DE_LA_NUBE_CLOUDINARY?.trim() ||
       process.env.VITE_CLOUDINARY_CLOUD_NAME?.trim() ||
       '';
     const uploadPreset =
       process.env.CLOUDINARY_UPLOAD_PRESET?.trim() ||
+      process.env.PREAJUSTE_DE_SUBIDA_CLOUDINARY?.trim() ||
       process.env.VITE_CLOUDINARY_UPLOAD_PRESET?.trim() ||
       '';
-    const apiKey = process.env.CLOUDINARY_API_KEY?.trim() || '';
-    const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim() || '';
+    const apiKey =
+      process.env.CLOUDINARY_API_KEY?.trim() ||
+      process.env.CLAVE_API_DE_CLOUDINARY?.trim() ||
+      '';
+    const apiSecret =
+      process.env.CLOUDINARY_API_SECRET?.trim() ||
+      process.env.SECRETO_API_DE_CLOUDINARY?.trim() ||
+      '';
 
     const isSigned = Boolean(cloudName && apiKey && apiSecret);
     const isUnsigned = Boolean(cloudName && uploadPreset);
@@ -199,14 +207,22 @@ async function startServer() {
 
     const cloudName =
       process.env.CLOUDINARY_CLOUD_NAME?.trim() ||
+      process.env.NOMBRE_DE_LA_NUBE_CLOUDINARY?.trim() ||
       process.env.VITE_CLOUDINARY_CLOUD_NAME?.trim() ||
       '';
     const uploadPreset =
       process.env.CLOUDINARY_UPLOAD_PRESET?.trim() ||
+      process.env.PREAJUSTE_DE_SUBIDA_CLOUDINARY?.trim() ||
       process.env.VITE_CLOUDINARY_UPLOAD_PRESET?.trim() ||
       '';
-    const apiKey = process.env.CLOUDINARY_API_KEY?.trim() || '';
-    const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim() || '';
+    const apiKey =
+      process.env.CLOUDINARY_API_KEY?.trim() ||
+      process.env.CLAVE_API_DE_CLOUDINARY?.trim() ||
+      '';
+    const apiSecret =
+      process.env.CLOUDINARY_API_SECRET?.trim() ||
+      process.env.SECRETO_API_DE_CLOUDINARY?.trim() ||
+      '';
 
     if (!cloudName || (!uploadPreset && !(apiKey && apiSecret))) {
       res.status(503).json({
