@@ -23,8 +23,107 @@ import {
   ShieldCheck,
   Store as StoreIcon,
 } from 'lucide-react';
-import { auth, db, handleFirestoreError } from '../lib/firebase';
+import { auth, db, firebaseApiKey, handleFirestoreError } from '../lib/firebase';
 import { OperationType, type Store, type StoreAccount } from '../types';
+
+function createSlugFromName(input: string): string {
+  const base = input
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+  const suffix = Math.random().toString(16).slice(2, 6);
+  return `${base || 'tienda'}-${suffix}`;
+}
+
+async function createStoreAccountFallback(params: {
+  name: string;
+  email: string;
+  whatsapp: string;
+  tempPassword: string;
+}) {
+  const cleanName = params.name.trim();
+  const cleanEmail = params.email.trim().toLowerCase();
+  const cleanWhatsapp = params.whatsapp.replace(/[^\d]/g, '').trim();
+
+  if (cleanName.length < 2 || cleanName.length > 100) {
+    throw new Error('El nombre del comercio debe tener entre 2 y 100 caracteres.');
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    throw new Error('Ingresá un correo electrónico válido para el comercio.');
+  }
+  if (cleanWhatsapp.length < 6 || cleanWhatsapp.length > 20) {
+    throw new Error('Ingresá un número de WhatsApp válido (ej. 5493764000000).');
+  }
+  if (params.tempPassword.length < 8) {
+    throw new Error('La contraseña temporal debe tener al menos 8 caracteres.');
+  }
+
+  const signUpRes = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${encodeURIComponent(firebaseApiKey)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: cleanEmail,
+        password: params.tempPassword,
+        returnSecureToken: true,
+      }),
+    }
+  );
+
+  const signUpText = await signUpRes.text();
+  let signUpData: {
+    localId?: string;
+    idToken?: string;
+    error?: { message?: string };
+  } = {};
+  try {
+    signUpData = signUpText ? JSON.parse(signUpText) : {};
+  } catch {
+    throw new Error('Respuesta inválida del servicio de autenticación de Firebase.');
+  }
+
+  if (!signUpRes.ok || !signUpData.localId) {
+    const code = signUpData.error?.message || 'AUTH_CREATE_FAILED';
+    if (code.includes('EMAIL_EXISTS')) {
+      throw new Error('Ya existe una cuenta en Firebase Authentication con ese correo electrónico.');
+    }
+    if (code.includes('OPERATION_NOT_ALLOWED')) {
+      throw new Error(
+        'Habilitá el proveedor "Correo electrónico/contraseña" en Firebase Console > Authentication > Sign-in method para el proyecto nexo-tiendas-online.'
+      );
+    }
+    throw new Error(`No se pudo crear la cuenta del comercio (${code}).`);
+  }
+
+  if (signUpData.idToken) {
+    await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:update?key=${encodeURIComponent(firebaseApiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idToken: signUpData.idToken,
+          displayName: cleanName,
+          returnSecureToken: false,
+        }),
+      }
+    ).catch(() => undefined);
+  }
+
+  const slug = createSlugFromName(cleanName);
+  return {
+    uid: signUpData.localId,
+    email: cleanEmail,
+    name: cleanName,
+    whatsapp: cleanWhatsapp,
+    slug,
+    storeId: slug,
+  };
+}
 
 interface MasterAdminPanelProps {
   user: User;
@@ -103,21 +202,7 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
     setCreating(true);
     try {
       const idToken = await user.getIdToken();
-      const res = await fetch('/api/admin/create-store', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          name: name.trim(),
-          email: email.trim(),
-          whatsapp: whatsapp.trim(),
-          tempPassword,
-        }),
-      });
-
-      const data = (await res.json()) as {
+      type CreateStoreResponse = {
         uid?: string;
         email?: string;
         name?: string;
@@ -125,10 +210,67 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
         slug?: string;
         storeId?: string;
         message?: string;
+        error?: string;
       };
+      let data: CreateStoreResponse | null = null;
+      let shouldFallback = false;
 
-      if (!res.ok || !data.uid || !data.storeId || !data.slug) {
-        throw new Error(data.message || 'No se pudo procesar la creación en el servidor.');
+      try {
+        const res = await fetch('/api/admin/create-store', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            name: name.trim(),
+            email: email.trim(),
+            whatsapp: whatsapp.trim(),
+            tempPassword,
+          }),
+        });
+
+        const rawText = await res.text();
+        let parsed: CreateStoreResponse | null = null;
+        try {
+          parsed = rawText ? (JSON.parse(rawText) as CreateStoreResponse) : null;
+        } catch {
+          parsed = null;
+        }
+
+        if (parsed && (parsed.uid || parsed.error || parsed.message)) {
+          if (!res.ok || !parsed.uid || !parsed.storeId || !parsed.slug) {
+            throw new Error(parsed.message || 'No se pudo procesar la creación en el servidor.');
+          }
+          data = parsed;
+        } else if (res.status === 404 || !parsed) {
+          shouldFallback = true;
+        } else {
+          throw new Error('No se pudo procesar la creación en el servidor.');
+        }
+      } catch (fetchErr) {
+        if (
+          fetchErr instanceof Error &&
+          !fetchErr.message.includes('Failed to fetch') &&
+          !fetchErr.message.includes('NetworkError') &&
+          !fetchErr.message.includes('Load failed')
+        ) {
+          throw fetchErr;
+        }
+        shouldFallback = true;
+      }
+
+      if (shouldFallback || !data) {
+        data = await createStoreAccountFallback({
+          name,
+          email,
+          whatsapp,
+          tempPassword,
+        });
+      }
+
+      if (!data.uid || !data.storeId || !data.slug) {
+        throw new Error('No se pudo completar la creación de la cuenta del comercio.');
       }
 
       const storePath = `stores/${data.storeId}`;

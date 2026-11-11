@@ -110,11 +110,20 @@ export async function uploadImageToCloudinary(
     body: formData,
   });
 
-  const data = (await res.json()) as {
+  const rawText = await res.text();
+  let data: {
     secureUrl?: string;
     message?: string;
     error?: string;
-  };
+  } = {};
+
+  try {
+    data = rawText ? (JSON.parse(rawText) as typeof data) : {};
+  } catch {
+    throw new Error(
+      `El servidor de imágenes respondió con un formato inesperado (HTTP ${res.status}). Podés pegar una URL de imagen directamente mientras se verifica el endpoint.`
+    );
+  }
 
   if (!res.ok || !data.secureUrl) {
     throw new Error(data.message || 'No se pudo subir la imagen a Cloudinary.');

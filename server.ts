@@ -475,6 +475,13 @@ async function startServer() {
     });
   });
 
+  app.use('/api', (_req: Request, res: Response) => {
+    res.status(404).json({
+      error: 'API_NOT_FOUND',
+      message: 'Endpoint de API no encontrado.',
+    });
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({

@@ -8,6 +8,7 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+export const firebaseApiKey = firebaseConfig.apiKey;
 
 export const MASTER_ADMIN_EMAILS = [
   'nexodigitalposadas@gmail.com',
