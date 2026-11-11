@@ -223,16 +223,18 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({
       {/* Store Cover Banner & Profile */}
       <section className="mx-auto max-w-6xl px-4 pt-5 sm:px-6">
         <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
-          <div className="relative h-52 w-full bg-zinc-900 sm:h-64">
+          <div className="relative aspect-[3/1] w-full overflow-hidden bg-zinc-100">
             <ResilientImage
               src={store.bannerUrl || DEMO_HERO_BANNER}
               alt={`Portada de ${store.name}`}
-              className="h-full w-full object-cover"
+              className="h-full w-full object-cover object-center"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
-            <div className="absolute inset-x-0 bottom-0 flex items-end gap-4 p-5 sm:p-6">
+          </div>
+
+          <div className="px-5 pb-4 pt-3 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
               {store.logoUrl && (
-                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 border-white bg-white shadow-md sm:h-20 sm:w-20">
+                <div className="-mt-10 relative z-10 h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 border-white bg-white shadow-md sm:-mt-12 sm:h-20 sm:w-20">
                   <ResilientImage
                     src={store.logoUrl}
                     alt={`Logo de ${store.name}`}
@@ -240,12 +242,12 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({
                   />
                 </div>
               )}
-              <div className="min-w-0 text-white">
-                <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl text-balance">
+              <div className="min-w-0 flex-1">
+                <h1 className="font-display text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl text-balance">
                   {store.name}
                 </h1>
                 {store.description && (
-                  <p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-200 sm:text-sm">
+                  <p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-600 sm:text-sm">
                     {store.description}
                   </p>
                 )}
@@ -253,34 +255,36 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-zinc-100 px-5 py-3.5 text-xs text-zinc-600 sm:px-6">
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-              {store.address && (
-                <span className="inline-flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5 text-zinc-400" />
-                  <span>{store.address}</span>
-                </span>
-              )}
-              {store.hours && (
-                <span className="inline-flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 text-zinc-400" />
-                  <span>{store.hours}</span>
-                </span>
+          {(store.address || store.hours || store.whatsapp) && (
+            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-zinc-100 px-5 py-3 text-xs text-zinc-600 sm:px-6">
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                {store.address && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5 text-zinc-400" />
+                    <span>{store.address}</span>
+                  </span>
+                )}
+                {store.hours && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 text-zinc-400" />
+                    <span>{store.hours}</span>
+                  </span>
+                )}
+              </div>
+
+              {store.whatsapp && (
+                <a
+                  href={`https://wa.me/${store.whatsapp.replace(/[^\d]/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 font-semibold text-emerald-700 hover:text-emerald-800 whitespace-nowrap"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  <span>Consultar por WhatsApp</span>
+                </a>
               )}
             </div>
-
-            {store.whatsapp && (
-              <a
-                href={`https://wa.me/${store.whatsapp.replace(/[^\d]/g, '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 font-semibold text-emerald-700 hover:text-emerald-800 whitespace-nowrap"
-              >
-                <MessageCircle className="h-3.5 w-3.5" />
-                <span>Consultar por WhatsApp</span>
-              </a>
-            )}
-          </div>
+          )}
         </div>
       </section>
 

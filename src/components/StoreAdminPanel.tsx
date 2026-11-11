@@ -867,7 +867,7 @@ export const StoreAdminPanel: React.FC<StoreAdminPanelProps> = ({
               <div className="grid gap-6 border-t border-zinc-100 pt-6 sm:grid-cols-2">
                 <ImageUploaderField
                   label="Banner de portada"
-                  helperText="Recomendado formato panorámico (16:9). Alojado en Cloudinary."
+                  helperText="Medida recomendada: 1200 × 400 px (formato panorámico 3:1). Se muestra completo en celular y PC."
                   value={bizBanner}
                   onChange={setBizBanner}
                   folder={`stores/${store.slug}/banners`}
