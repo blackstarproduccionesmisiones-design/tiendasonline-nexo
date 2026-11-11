@@ -1,0 +1,234 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isAdminEmail() {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && (
+          request.auth.token.email == 'nexodigitalposadas@gmail.com' ||
+          request.auth.token.email == 'blackstarproducciones.misiones@gmail.com'
+        );
+    }
+
+    function isAdmin() {
+      return isAdminEmail() || (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isValidStore(data, storeId) {
+      return data.keys().hasAll(['id', 'slug', 'name', 'whatsapp', 'isActive', 'ownerUid', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'id', 'slug', 'name', 'description', 'whatsapp', 'address', 'hours',
+          'bannerUrl', 'logoUrl', 'appIconUrl', 'accentColor', 'isActive',
+          'ownerUid', 'createdAt', 'updatedAt'
+        ])
+        && data.id == storeId
+        && isValidId(data.id)
+        && data.slug is string && data.slug.size() >= 2 && data.slug.size() <= 80 && data.slug.matches('^[a-z0-9\\-]+$')
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
+        && (!('description' in data) || (data.description is string && data.description.size() <= 500))
+        && data.whatsapp is string && data.whatsapp.size() >= 6 && data.whatsapp.size() <= 30
+        && (!('address' in data) || (data.address is string && data.address.size() <= 200))
+        && (!('hours' in data) || (data.hours is string && data.hours.size() <= 200))
+        && (!('bannerUrl' in data) || (data.bannerUrl is string && data.bannerUrl.size() <= 1000))
+        && (!('logoUrl' in data) || (data.logoUrl is string && data.logoUrl.size() <= 1000))
+        && (!('appIconUrl' in data) || (data.appIconUrl is string && data.appIconUrl.size() <= 1000))
+        && (!('accentColor' in data) || (data.accentColor is string && data.accentColor.size() <= 20))
+        && data.isActive is bool
+        && isValidId(data.ownerUid)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidStoreAccount(data, storeId) {
+      return data.keys().hasAll(['storeId', 'ownerUid', 'ownerEmail', 'createdAt'])
+        && data.keys().hasOnly(['storeId', 'ownerUid', 'ownerEmail', 'createdAt'])
+        && data.storeId == storeId
+        && isValidId(data.storeId)
+        && isValidId(data.ownerUid)
+        && data.ownerEmail is string && data.ownerEmail.size() >= 3 && data.ownerEmail.size() <= 200
+        && data.createdAt is timestamp;
+    }
+
+    function isValidCategory(data, storeId, categoryId) {
+      return data.keys().hasAll(['id', 'storeId', 'ownerUid', 'name', 'order', 'isAvailable', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'storeId', 'ownerUid', 'name', 'description', 'order', 'isAvailable', 'createdAt', 'updatedAt'])
+        && data.id == categoryId
+        && isValidId(data.id)
+        && data.storeId == storeId
+        && isValidId(data.ownerUid)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 80
+        && (!('description' in data) || (data.description is string && data.description.size() <= 240))
+        && data.order is number && data.order >= 0 && data.order <= 10000
+        && data.isAvailable is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidProduct(data, storeId, productId) {
+      return data.keys().hasAll(['id', 'storeId', 'ownerUid', 'categoryId', 'name', 'price', 'isAvailable', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'id', 'storeId', 'ownerUid', 'categoryId', 'name', 'description',
+          'price', 'imageUrl', 'isAvailable', 'featured', 'createdAt', 'updatedAt'
+        ])
+        && data.id == productId
+        && isValidId(data.id)
+        && data.storeId == storeId
+        && isValidId(data.ownerUid)
+        && isValidId(data.categoryId)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && (!('description' in data) || (data.description is string && data.description.size() <= 600))
+        && data.price is number && data.price >= 0 && data.price <= 100000000
+        && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 1000))
+        && data.isAvailable is bool
+        && (!('featured' in data) || data.featured is bool)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /admins/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdminEmail());
+      allow list: if isAdminEmail();
+      allow create, update, delete: if isAdminEmail() && isValidId(userId);
+    }
+
+    match /stores/{storeId} {
+      allow get: if isValidId(storeId) && (resource == null || existing().isActive == true || (isSignedIn() && existing().ownerUid == request.auth.uid) || isAdmin());
+      allow list: if existing().isActive == true || (isSignedIn() && existing().ownerUid == request.auth.uid) || isAdminEmail();
+
+      allow create: if isAdmin()
+        && isValidId(storeId)
+        && isValidStore(incoming(), storeId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isValidId(storeId)
+        && isValidStore(incoming(), storeId)
+        && incoming().id == existing().id
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            isSignedIn()
+            && existing().ownerUid == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'description', 'whatsapp', 'address', 'hours',
+              'bannerUrl', 'logoUrl', 'appIconUrl', 'accentColor', 'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if isAdmin() && isValidId(storeId);
+
+      match /categories/{categoryId} {
+        allow get: if isValidId(storeId) && isValidId(categoryId)
+          && (resource == null || existing().isAvailable == true || (isSignedIn() && existing().ownerUid == request.auth.uid) || isAdmin());
+        allow list: if existing().isAvailable == true
+          || (isSignedIn() && existing().ownerUid == request.auth.uid)
+          || isAdminEmail();
+
+        allow create: if isValidId(storeId) && isValidId(categoryId)
+          && isValidCategory(incoming(), storeId, categoryId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/stores/$(storeId))
+          && incoming().ownerUid == get(/databases/$(database)/documents/stores/$(storeId)).data.ownerUid
+          && (isAdmin() || (isSignedIn() && incoming().ownerUid == request.auth.uid));
+
+        allow update: if isValidId(storeId) && isValidId(categoryId)
+          && isValidCategory(incoming(), storeId, categoryId)
+          && incoming().id == existing().id
+          && incoming().storeId == existing().storeId
+          && incoming().ownerUid == existing().ownerUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            isAdmin() ||
+            (
+              isSignedIn()
+              && existing().ownerUid == request.auth.uid
+              && incoming().diff(existing()).affectedKeys().hasOnly([
+                'name', 'description', 'order', 'isAvailable', 'updatedAt'
+              ])
+            )
+          );
+
+        allow delete: if isValidId(storeId) && isValidId(categoryId)
+          && (isAdmin() || (isSignedIn() && existing().ownerUid == request.auth.uid));
+      }
+
+      match /products/{productId} {
+        allow get: if isValidId(storeId) && isValidId(productId)
+          && (resource == null || existing().isAvailable == true || (isSignedIn() && existing().ownerUid == request.auth.uid) || isAdmin());
+        allow list: if existing().isAvailable == true
+          || (isSignedIn() && existing().ownerUid == request.auth.uid)
+          || isAdminEmail();
+
+        allow create: if isValidId(storeId) && isValidId(productId)
+          && isValidProduct(incoming(), storeId, productId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/stores/$(storeId))
+          && incoming().ownerUid == get(/databases/$(database)/documents/stores/$(storeId)).data.ownerUid
+          && (isAdmin() || (isSignedIn() && incoming().ownerUid == request.auth.uid));
+
+        allow update: if isValidId(storeId) && isValidId(productId)
+          && isValidProduct(incoming(), storeId, productId)
+          && incoming().id == existing().id
+          && incoming().storeId == existing().storeId
+          && incoming().ownerUid == existing().ownerUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            isAdmin() ||
+            (
+              isSignedIn()
+              && existing().ownerUid == request.auth.uid
+              && incoming().diff(existing()).affectedKeys().hasOnly([
+                'categoryId', 'name', 'description', 'price', 'imageUrl', 'isAvailable', 'featured', 'updatedAt'
+              ])
+            )
+          );
+
+        allow delete: if isValidId(storeId) && isValidId(productId)
+          && (isAdmin() || (isSignedIn() && existing().ownerUid == request.auth.uid));
+      }
+    }
+
+    match /storeAccounts/{storeId} {
+      allow get: if isValidId(storeId) && (isAdmin() || (isSignedIn() && existing().ownerUid == request.auth.uid));
+      allow list: if isAdminEmail() || (isSignedIn() && existing().ownerUid == request.auth.uid);
+      allow create: if isAdmin()
+        && isValidId(storeId)
+        && isValidStoreAccount(incoming(), storeId)
+        && incoming().createdAt == request.time;
+      allow update: if isAdmin()
+        && isValidId(storeId)
+        && isValidStoreAccount(incoming(), storeId)
+        && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin() && isValidId(storeId);
+    }
+  }
+}
