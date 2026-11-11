@@ -133,24 +133,35 @@ async function uploadDirectToCloudinary(
 ): Promise<string> {
   const safeFolder = folder.replace(/[^a-zA-Z0-9_\-/]/g, '').slice(0, 80) || 'catalogos';
   const fullFolder = `nexo-tiendas/${safeFolder}`;
+  const cleanCloudName = config.cloudName.trim().replace(/^['"]+|['"]+$/g, '');
+  const cleanPreset = config.uploadPreset.trim().replace(/^['"]+|['"]+$/g, '');
 
   const formData = new FormData();
   formData.append('file', blob, fileName);
-  formData.append('upload_preset', config.uploadPreset);
+  formData.append('upload_preset', cleanPreset);
   formData.append('folder', fullFolder);
 
   const res = await fetch(
-    `https://api.cloudinary.com/v1_1/${encodeURIComponent(config.cloudName)}/image/upload`,
+    `https://api.cloudinary.com/v1_1/${encodeURIComponent(cleanCloudName)}/image/upload`,
     {
       method: 'POST',
       body: formData,
     }
   );
 
-  const data = (await res.json()) as {
+  const rawText = await res.text();
+  let data: {
     secure_url?: string;
     error?: { message?: string };
-  };
+  } = {};
+
+  try {
+    data = rawText ? (JSON.parse(rawText) as typeof data) : {};
+  } catch {
+    throw new Error(
+      `Cloudinary devolvió una respuesta inesperada (HTTP ${res.status}). Verificá el Cloud Name configurado.`
+    );
+  }
 
   if (!res.ok || !data.secure_url) {
     throw new Error(
@@ -180,8 +191,7 @@ export async function uploadImageToCloudinary(
   formData.append('folder', folder);
   formData.append('file', processedBlob, fileName);
 
-  let serverNotAvailable = false;
-  let serverNotConfiguredMsg: string | null = null;
+  let serverErrorMsg: string | null = null;
 
   try {
     const res = await fetch('/api/upload', {
@@ -210,25 +220,17 @@ export async function uploadImageToCloudinary(
       return data.secureUrl;
     }
 
-    if (data?.error === 'CLOUDINARY_NOT_CONFIGURED' || res.status === 503) {
-      serverNotConfiguredMsg = data?.message || null;
-      serverNotAvailable = true;
-    } else if (!data || res.status === 404 || res.status === 405) {
-      serverNotAvailable = true;
-    } else {
-      throw new Error(data.message || 'No se pudo subir la imagen a Cloudinary.');
+    if (res.status === 401) {
+      throw new Error(data?.message || 'Tu sesión expiró. Volvé a iniciar sesión.');
+    }
+
+    if (data?.message) {
+      serverErrorMsg = data.message;
     }
   } catch (err) {
-    if (
-      err instanceof Error &&
-      !err.message.includes('Failed to fetch') &&
-      !err.message.includes('NetworkError') &&
-      !err.message.includes('Load failed') &&
-      !serverNotAvailable
-    ) {
+    if (err instanceof Error && err.message.includes('expiró')) {
       throw err;
     }
-    serverNotAvailable = true;
   }
 
   // Fallback: direct unsigned upload to Cloudinary from the browser
@@ -238,7 +240,7 @@ export async function uploadImageToCloudinary(
   }
 
   throw new Error(
-    serverNotConfiguredMsg ||
+    serverErrorMsg ||
       'Todavía no está configurado Cloudinary para subir archivos desde el dispositivo. El administrador maestro debe cargar el Cloud Name y Upload Preset (unsigned) en Panel maestro NEXO+ → Configuración de Cloudinary (o en las variables de entorno de Vercel). Mientras tanto, podés usar la pestaña "Pegar URL".'
   );
 }

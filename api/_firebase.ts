@@ -86,25 +86,30 @@ export async function verifyFirebaseIdToken(idToken: string): Promise<VerifiedTo
   }
 }
 
+function cleanEnvValue(val?: string): string {
+  if (!val) return '';
+  return val.trim().replace(/^['"]+|['"]+$/g, '').trim();
+}
+
 export function getCloudinaryServerEnv(): ServerCloudinaryEnv {
   return {
     cloudName:
-      process.env.CLOUDINARY_CLOUD_NAME?.trim() ||
-      process.env.NOMBRE_DE_LA_NUBE_CLOUDINARY?.trim() ||
-      process.env.VITE_CLOUDINARY_CLOUD_NAME?.trim() ||
+      cleanEnvValue(process.env.CLOUDINARY_CLOUD_NAME) ||
+      cleanEnvValue(process.env.NOMBRE_DE_LA_NUBE_CLOUDINARY) ||
+      cleanEnvValue(process.env.VITE_CLOUDINARY_CLOUD_NAME) ||
       '',
     uploadPreset:
-      process.env.CLOUDINARY_UPLOAD_PRESET?.trim() ||
-      process.env.PREAJUSTE_DE_SUBIDA_CLOUDINARY?.trim() ||
-      process.env.VITE_CLOUDINARY_UPLOAD_PRESET?.trim() ||
+      cleanEnvValue(process.env.CLOUDINARY_UPLOAD_PRESET) ||
+      cleanEnvValue(process.env.PREAJUSTE_DE_SUBIDA_CLOUDINARY) ||
+      cleanEnvValue(process.env.VITE_CLOUDINARY_UPLOAD_PRESET) ||
       '',
     apiKey:
-      process.env.CLOUDINARY_API_KEY?.trim() ||
-      process.env.CLAVE_API_DE_CLOUDINARY?.trim() ||
+      cleanEnvValue(process.env.CLOUDINARY_API_KEY) ||
+      cleanEnvValue(process.env.CLAVE_API_DE_CLOUDINARY) ||
       '',
     apiSecret:
-      process.env.CLOUDINARY_API_SECRET?.trim() ||
-      process.env.SECRETO_API_DE_CLOUDINARY?.trim() ||
+      cleanEnvValue(process.env.CLOUDINARY_API_SECRET) ||
+      cleanEnvValue(process.env.SECRETO_API_DE_CLOUDINARY) ||
       '',
   };
 }

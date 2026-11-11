@@ -301,13 +301,24 @@ async function startServer() {
         }
       );
 
-      const cloudData = (await cloudRes.json()) as {
+      const cloudRaw = await cloudRes.text();
+      let cloudData: {
         secure_url?: string;
         public_id?: string;
         width?: number;
         height?: number;
         error?: { message?: string };
-      };
+      } = {};
+
+      try {
+        cloudData = cloudRaw ? (JSON.parse(cloudRaw) as typeof cloudData) : {};
+      } catch {
+        res.status(502).json({
+          error: 'CLOUDINARY_INVALID_RESPONSE',
+          message: `Cloudinary devolvió una respuesta inesperada (HTTP ${cloudRes.status}). Verificá el valor de Cloud Name.`,
+        });
+        return;
+      }
 
       if (!cloudRes.ok || !cloudData.secure_url) {
         res.status(502).json({

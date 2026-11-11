@@ -107,13 +107,24 @@ export default async function handler(req: MulterRequest, res: ServerResponse): 
       }
     );
 
-    const cloudData = (await cloudRes.json()) as {
+    const cloudRaw = await cloudRes.text();
+    let cloudData: {
       secure_url?: string;
       public_id?: string;
       width?: number;
       height?: number;
       error?: { message?: string };
-    };
+    } = {};
+
+    try {
+      cloudData = cloudRaw ? (JSON.parse(cloudRaw) as typeof cloudData) : {};
+    } catch {
+      sendJson(res, 502, {
+        error: 'CLOUDINARY_INVALID_RESPONSE',
+        message: `Cloudinary devolvió una respuesta inesperada (HTTP ${cloudRes.status}). Verificá el valor de Cloud Name en Vercel.`,
+      });
+      return;
+    }
 
     if (!cloudRes.ok || !cloudData.secure_url) {
       sendJson(res, 502, {
