@@ -4,8 +4,6 @@ import {
   doc,
   getDoc,
   onSnapshot,
-  orderBy,
-  query,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -39,6 +37,28 @@ function createSlugFromName(input: string): string {
     .replace(/^-+|-+$/g, '')
     .slice(0, 60);
   return base || 'tienda';
+}
+
+function getTimestampMs(value: unknown): number {
+  if (!value) return Date.now();
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  if (typeof value === 'object' && value !== null) {
+    const maybeTs = value as { toMillis?: () => number; seconds?: number };
+    if (typeof maybeTs.toMillis === 'function') return maybeTs.toMillis();
+    if (typeof maybeTs.seconds === 'number') return maybeTs.seconds * 1000;
+  }
+  return 0;
+}
+
+function sortStores(list: Store[]): Store[] {
+  return [...list].sort(
+    (a, b) => getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt)
+  );
 }
 
 async function createStoreAccountFallback(params: {
@@ -173,12 +193,11 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
   const [cloudinaryErr, setCloudinaryErr] = useState<string | null>(null);
 
   useEffect(() => {
-    const q = query(collection(db, 'stores'), orderBy('createdAt', 'desc'));
     const unsubStores = onSnapshot(
-      q,
+      collection(db, 'stores'),
       (snap) => {
         const list = snap.docs.map((d) => d.data() as Store);
-        setStores(list);
+        setStores(sortStores(list));
         setLoadingStores(false);
       },
       (err) => {
@@ -383,6 +402,37 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
         handleFirestoreError(catErr, OperationType.CREATE, catPath);
       }
 
+      const nowIso = new Date().toISOString();
+      const createdStore: Store = {
+        id: finalStoreId,
+        slug: finalSlug,
+        name: data.name || name.trim(),
+        description: 'Catálogo online y pedidos por WhatsApp.',
+        whatsapp: data.whatsapp || whatsapp.replace(/[^\d]/g, ''),
+        address: '',
+        hours: '',
+        bannerUrl: '',
+        logoUrl: '',
+        appIconUrl: '',
+        accentColor: '#0F172A',
+        isActive: true,
+        ownerUid: data.uid,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+      setStores((prev) =>
+        sortStores([createdStore, ...prev.filter((s) => s.id !== finalStoreId)])
+      );
+      setAccountsMap((prev) => ({
+        ...prev,
+        [finalStoreId]: {
+          storeId: finalStoreId,
+          ownerUid: data.uid!,
+          ownerEmail: data.email || email.trim().toLowerCase(),
+          createdAt: nowIso,
+        },
+      }));
+
       setSuccessMsg(
         `Comercio "${data.name}" creado correctamente (?store=${finalSlug}). El titular ya puede ingresar con ${data.email}.`
       );
@@ -401,12 +451,19 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
 
   const handleToggleActive = async (store: Store) => {
     const path = `stores/${store.id}`;
+    const nextActive = !store.isActive;
+    setStores((prev) =>
+      prev.map((s) => (s.id === store.id ? { ...s, isActive: nextActive } : s))
+    );
     try {
       await updateDoc(doc(db, 'stores', store.id), {
-        isActive: !store.isActive,
+        isActive: nextActive,
         updatedAt: serverTimestamp(),
       });
     } catch (err) {
+      setStores((prev) =>
+        prev.map((s) => (s.id === store.id ? { ...s, isActive: store.isActive } : s))
+      );
       handleFirestoreError(err, OperationType.UPDATE, path);
     }
   };
@@ -449,6 +506,10 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
         slug: clean,
         updatedAt: serverTimestamp(),
       });
+      const editedId = editingSlugStore.id;
+      setStores((prev) =>
+        prev.map((s) => (s.id === editedId ? { ...s, slug: clean } : s))
+      );
       setEditingSlugStore(null);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, path);

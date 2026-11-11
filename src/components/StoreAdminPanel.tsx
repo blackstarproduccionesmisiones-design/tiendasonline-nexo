@@ -4,11 +4,11 @@ import {
   deleteDoc,
   doc,
   onSnapshot,
-  orderBy,
   query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from 'firebase/firestore';
 import { signOut, type User } from 'firebase/auth';
 import {
@@ -65,6 +65,42 @@ function formatPriceARS(value: number): string {
     currency: 'ARS',
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function getTimestampMs(value: unknown): number {
+  if (!value) return Date.now();
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  if (typeof value === 'object' && value !== null) {
+    const maybeTs = value as { toMillis?: () => number; seconds?: number };
+    if (typeof maybeTs.toMillis === 'function') {
+      return maybeTs.toMillis();
+    }
+    if (typeof maybeTs.seconds === 'number') {
+      return maybeTs.seconds * 1000;
+    }
+  }
+  return 0;
+}
+
+function sortCategories(list: Category[]): Category[] {
+  return [...list].sort((a, b) => {
+    const orderDiff = (a.order ?? 0) - (b.order ?? 0);
+    if (orderDiff !== 0) return orderDiff;
+    return (a.name || '').localeCompare(b.name || '', 'es');
+  });
+}
+
+function sortProducts(list: Product[]): Product[] {
+  return [...list].sort((a, b) => {
+    const timeDiff = getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt);
+    if (timeDiff !== 0) return timeDiff;
+    return (a.name || '').localeCompare(b.name || '', 'es');
+  });
 }
 
 export const StoreAdminPanel: React.FC<StoreAdminPanelProps> = ({
@@ -129,13 +165,22 @@ export const StoreAdminPanel: React.FC<StoreAdminPanelProps> = ({
   }, [store]);
 
   useEffect(() => {
+    setLoadingCatalog(true);
     const catPath = `stores/${store.id}/categories`;
     const prodPath = `stores/${store.id}/products`;
 
+    const catsQuery = isMasterAdminView
+      ? collection(db, catPath)
+      : query(collection(db, catPath), where('ownerUid', '==', store.ownerUid));
+
+    const prodsQuery = isMasterAdminView
+      ? collection(db, prodPath)
+      : query(collection(db, prodPath), where('ownerUid', '==', store.ownerUid));
+
     const unsubCats = onSnapshot(
-      query(collection(db, catPath), orderBy('order', 'asc')),
+      catsQuery,
       (snap) => {
-        setCategories(snap.docs.map((d) => d.data() as Category));
+        setCategories(sortCategories(snap.docs.map((d) => d.data() as Category)));
         setLoadingCatalog(false);
       },
       (err) => {
@@ -145,9 +190,9 @@ export const StoreAdminPanel: React.FC<StoreAdminPanelProps> = ({
     );
 
     const unsubProds = onSnapshot(
-      query(collection(db, prodPath), orderBy('createdAt', 'desc')),
+      prodsQuery,
       (snap) => {
-        setProducts(snap.docs.map((d) => d.data() as Product));
+        setProducts(sortProducts(snap.docs.map((d) => d.data() as Product)));
       },
       (err) => {
         handleFirestoreError(err, OperationType.LIST, prodPath);
@@ -158,7 +203,7 @@ export const StoreAdminPanel: React.FC<StoreAdminPanelProps> = ({
       unsubCats();
       unsubProds();
     };
-  }, [store.id]);
+  }, [store.id, store.ownerUid, isMasterAdminView]);
 
   const categoryNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -203,21 +248,44 @@ export const StoreAdminPanel: React.FC<StoreAdminPanelProps> = ({
     e.preventDefault();
     setSavingProd(true);
     const numericPrice = Math.max(0, Number(pPrice) || 0);
+    const resolvedCategoryId = pCategoryId || categories[0]?.id || 'general';
+    const cleanName = pName.trim();
+    const cleanDesc = pDesc.trim();
+    const cleanImageUrl = pImageUrl.trim();
 
     try {
       if (editingProduct) {
         const path = `stores/${store.id}/products/${editingProduct.id}`;
         try {
           await updateDoc(doc(db, 'stores', store.id, 'products', editingProduct.id), {
-            categoryId: pCategoryId || categories[0]?.id || 'general',
-            name: pName.trim(),
-            description: pDesc.trim(),
+            categoryId: resolvedCategoryId,
+            name: cleanName,
+            description: cleanDesc,
             price: numericPrice,
-            imageUrl: pImageUrl.trim(),
+            imageUrl: cleanImageUrl,
             isAvailable: pAvailable,
             featured: pFeatured,
             updatedAt: serverTimestamp(),
           });
+          setProducts((prev) =>
+            sortProducts(
+              prev.map((item) =>
+                item.id === editingProduct.id
+                  ? {
+                      ...item,
+                      categoryId: resolvedCategoryId,
+                      name: cleanName,
+                      description: cleanDesc,
+                      price: numericPrice,
+                      imageUrl: cleanImageUrl,
+                      isAvailable: pAvailable,
+                      featured: pFeatured,
+                      updatedAt: new Date().toISOString(),
+                    }
+                  : item
+              )
+            )
+          );
         } catch (err) {
           handleFirestoreError(err, OperationType.UPDATE, path);
         }
@@ -229,16 +297,34 @@ export const StoreAdminPanel: React.FC<StoreAdminPanelProps> = ({
             id: newId,
             storeId: store.id,
             ownerUid: store.ownerUid,
-            categoryId: pCategoryId || categories[0]?.id || 'general',
-            name: pName.trim(),
-            description: pDesc.trim(),
+            categoryId: resolvedCategoryId,
+            name: cleanName,
+            description: cleanDesc,
             price: numericPrice,
-            imageUrl: pImageUrl.trim(),
+            imageUrl: cleanImageUrl,
             isAvailable: pAvailable,
             featured: pFeatured,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
+          const nowIso = new Date().toISOString();
+          const createdProduct: Product = {
+            id: newId,
+            storeId: store.id,
+            ownerUid: store.ownerUid,
+            categoryId: resolvedCategoryId,
+            name: cleanName,
+            description: cleanDesc,
+            price: numericPrice,
+            imageUrl: cleanImageUrl,
+            isAvailable: pAvailable,
+            featured: pFeatured,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          };
+          setProducts((prev) =>
+            sortProducts([createdProduct, ...prev.filter((item) => item.id !== newId)])
+          );
         } catch (err) {
           handleFirestoreError(err, OperationType.CREATE, path);
         }
@@ -251,21 +337,34 @@ export const StoreAdminPanel: React.FC<StoreAdminPanelProps> = ({
 
   const handleToggleProductAvailability = async (prod: Product) => {
     const path = `stores/${store.id}/products/${prod.id}`;
+    const nextAvailable = !prod.isAvailable;
+    setProducts((prev) =>
+      prev.map((item) =>
+        item.id === prod.id ? { ...item, isAvailable: nextAvailable } : item
+      )
+    );
     try {
       await updateDoc(doc(db, 'stores', store.id, 'products', prod.id), {
-        isAvailable: !prod.isAvailable,
+        isAvailable: nextAvailable,
         updatedAt: serverTimestamp(),
       });
     } catch (err) {
+      setProducts((prev) =>
+        prev.map((item) =>
+          item.id === prod.id ? { ...item, isAvailable: prod.isAvailable } : item
+        )
+      );
       handleFirestoreError(err, OperationType.UPDATE, path);
     }
   };
 
   const handleDeleteProduct = async (prod: Product) => {
     const path = `stores/${store.id}/products/${prod.id}`;
+    setProducts((prev) => prev.filter((item) => item.id !== prod.id));
     try {
       await deleteDoc(doc(db, 'stores', store.id, 'products', prod.id));
     } catch (err) {
+      setProducts((prev) => sortProducts([prod, ...prev]));
       handleFirestoreError(err, OperationType.DELETE, path);
     }
   };
@@ -292,18 +391,36 @@ export const StoreAdminPanel: React.FC<StoreAdminPanelProps> = ({
     e.preventDefault();
     setSavingCat(true);
     const numOrder = Math.max(0, Number(cOrder) || 0);
+    const cleanName = cName.trim();
+    const cleanDesc = cDesc.trim();
 
     try {
       if (editingCategory) {
         const path = `stores/${store.id}/categories/${editingCategory.id}`;
         try {
           await updateDoc(doc(db, 'stores', store.id, 'categories', editingCategory.id), {
-            name: cName.trim(),
-            description: cDesc.trim(),
+            name: cleanName,
+            description: cleanDesc,
             order: numOrder,
             isAvailable: cAvailable,
             updatedAt: serverTimestamp(),
           });
+          setCategories((prev) =>
+            sortCategories(
+              prev.map((item) =>
+                item.id === editingCategory.id
+                  ? {
+                      ...item,
+                      name: cleanName,
+                      description: cleanDesc,
+                      order: numOrder,
+                      isAvailable: cAvailable,
+                      updatedAt: new Date().toISOString(),
+                    }
+                  : item
+              )
+            )
+          );
         } catch (err) {
           handleFirestoreError(err, OperationType.UPDATE, path);
         }
@@ -315,13 +432,28 @@ export const StoreAdminPanel: React.FC<StoreAdminPanelProps> = ({
             id: newId,
             storeId: store.id,
             ownerUid: store.ownerUid,
-            name: cName.trim(),
-            description: cDesc.trim(),
+            name: cleanName,
+            description: cleanDesc,
             order: numOrder,
             isAvailable: cAvailable,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
+          const nowIso = new Date().toISOString();
+          const createdCategory: Category = {
+            id: newId,
+            storeId: store.id,
+            ownerUid: store.ownerUid,
+            name: cleanName,
+            description: cleanDesc,
+            order: numOrder,
+            isAvailable: cAvailable,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          };
+          setCategories((prev) =>
+            sortCategories([...prev.filter((item) => item.id !== newId), createdCategory])
+          );
         } catch (err) {
           handleFirestoreError(err, OperationType.CREATE, path);
         }
@@ -334,21 +466,34 @@ export const StoreAdminPanel: React.FC<StoreAdminPanelProps> = ({
 
   const handleToggleCategoryAvailability = async (cat: Category) => {
     const path = `stores/${store.id}/categories/${cat.id}`;
+    const nextAvailable = !cat.isAvailable;
+    setCategories((prev) =>
+      prev.map((item) =>
+        item.id === cat.id ? { ...item, isAvailable: nextAvailable } : item
+      )
+    );
     try {
       await updateDoc(doc(db, 'stores', store.id, 'categories', cat.id), {
-        isAvailable: !cat.isAvailable,
+        isAvailable: nextAvailable,
         updatedAt: serverTimestamp(),
       });
     } catch (err) {
+      setCategories((prev) =>
+        prev.map((item) =>
+          item.id === cat.id ? { ...item, isAvailable: cat.isAvailable } : item
+        )
+      );
       handleFirestoreError(err, OperationType.UPDATE, path);
     }
   };
 
   const handleDeleteCategory = async (cat: Category) => {
     const path = `stores/${store.id}/categories/${cat.id}`;
+    setCategories((prev) => prev.filter((item) => item.id !== cat.id));
     try {
       await deleteDoc(doc(db, 'stores', store.id, 'categories', cat.id));
     } catch (err) {
+      setCategories((prev) => sortCategories([...prev, cat]));
       handleFirestoreError(err, OperationType.DELETE, path);
     }
   };
