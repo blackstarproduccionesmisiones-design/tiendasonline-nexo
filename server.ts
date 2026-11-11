@@ -88,8 +88,12 @@ function slugifyStoreName(input: string): string {
   return base || 'tienda';
 }
 
+function isCloudinaryUploadUrl(url: string): boolean {
+  return url.includes('res.cloudinary.com') && url.includes('/image/upload/');
+}
+
 function toCloudinarySizedIcon(url: string, size: number): string {
-  if (!url.includes('res.cloudinary.com') || !url.includes('/image/upload/')) {
+  if (!isCloudinaryUploadUrl(url)) {
     return url;
   }
   return url.replace(
@@ -110,8 +114,35 @@ async function fetchStoreForManifest(slug: string): Promise<{
   appIconUrl: string;
   logoUrl: string;
 } | null> {
+  const dbId = firebaseConfig.firestoreDatabaseId || '(default)';
+
   try {
-    const dbId = firebaseConfig.firestoreDatabaseId || '(default)';
+    const docUrl = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(
+      firebaseConfig.projectId
+    )}/databases/${encodeURIComponent(dbId)}/documents/stores/${encodeURIComponent(
+      slug
+    )}?key=${encodeURIComponent(firebaseConfig.apiKey)}`;
+    const docRes = await fetch(docUrl);
+    if (docRes.ok) {
+      const docData = (await docRes.json()) as { fields?: Record<string, FirestoreFieldVal> };
+      const fields = docData.fields;
+      if (fields && fields.isActive?.booleanValue !== false) {
+        return {
+          name: fields.name?.stringValue || 'Tienda NEXO+',
+          description:
+            fields.description?.stringValue ||
+            'Catálogo online y pedidos por WhatsApp.',
+          accentColor: fields.accentColor?.stringValue || '#0F172A',
+          appIconUrl: fields.appIconUrl?.stringValue || '',
+          logoUrl: fields.logoUrl?.stringValue || '',
+        };
+      }
+    }
+  } catch {
+    // Fallback to query below
+  }
+
+  try {
     const endpoint = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(
       firebaseConfig.projectId
     )}/databases/${encodeURIComponent(dbId)}/documents:runQuery?key=${encodeURIComponent(
@@ -123,12 +154,12 @@ async function fetchStoreForManifest(slug: string): Promise<{
         from: [{ collectionId: 'stores' }],
         where: {
           fieldFilter: {
-            field: { fieldPath: 'slug' },
+            field: { fieldPath: 'isActive' },
             op: 'EQUAL',
-            value: { stringValue: slug },
+            value: { booleanValue: true },
           },
         },
-        limit: 1,
+        limit: 100,
       },
     };
 
@@ -143,7 +174,8 @@ async function fetchStoreForManifest(slug: string): Promise<{
       document?: { fields?: Record<string, FirestoreFieldVal> };
     }>;
 
-    const fields = rows[0]?.document?.fields;
+    const match = rows.find((r) => r.document?.fields?.slug?.stringValue === slug);
+    const fields = match?.document?.fields;
     if (!fields) return null;
 
     return {
@@ -444,8 +476,9 @@ async function startServer() {
     const description = store?.description || 'Catálogo digital y pedidos por WhatsApp.';
     const themeColor = store?.accentColor || fallbackTheme;
     const rawIcon = store?.appIconUrl || store?.logoUrl || fallbackIcon;
+    const useCustomCloudinaryIcon = Boolean(rawIcon && isCloudinaryUploadUrl(rawIcon));
 
-    const icons = rawIcon
+    const icons = useCustomCloudinaryIcon
       ? [
           {
             src: toCloudinarySizedIcon(rawIcon, 192),
@@ -490,6 +523,7 @@ async function startServer() {
     const startUrl = rawSlug ? `/?store=${encodeURIComponent(rawSlug)}` : '/';
     res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Access-Control-Allow-Origin', '*');
     res.json({
       id: startUrl,
       name,
@@ -498,6 +532,7 @@ async function startServer() {
       start_url: startUrl,
       scope: '/',
       display: 'standalone',
+      prefer_related_applications: false,
       theme_color: themeColor,
       background_color: '#FAFAFA',
       icons,

@@ -1,60 +1,54 @@
 import { useEffect, useState } from 'react';
+import {
+  getPWAState,
+  subscribePWAState,
+  triggerPWAInstallPrompt,
+} from '../lib/pwa';
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+function detectInAppBrowser(ua: string): boolean {
+  return /fban|fbav|instagram|whatsapp|line\/|micromessenger|snapchat|tiktok|; wv\)/i.test(ua);
 }
 
 export function usePWAInstall() {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isInstalled, setIsInstalled] = useState(false);
+  const initial = getPWAState();
+  const [isInstallable, setIsInstallable] = useState(Boolean(initial.deferredPrompt));
+  const [isInstalled, setIsInstalled] = useState(initial.isInstalled);
   const [isIOS, setIsIOS] = useState(false);
+  const [isInAppBrowser, setIsInAppBrowser] = useState(false);
+  const [isInIframe, setIsInIframe] = useState(false);
 
   useEffect(() => {
-    const isStandalone =
-      window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as unknown as { standalone?: boolean }).standalone === true;
-    setIsInstalled(isStandalone);
-
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
-    setIsIOS(isIOSDevice);
-
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    const sync = () => {
+      const state = getPWAState();
+      setIsInstallable(Boolean(state.deferredPrompt));
+      setIsInstalled(state.isInstalled);
     };
+    sync();
+    const unsub = subscribePWAState(sync);
 
-    const handleAppInstalled = () => {
-      setIsInstalled(true);
-      setDeferredPrompt(null);
-    };
+    const ua = window.navigator.userAgent || '';
+    const lowerUa = ua.toLowerCase();
+    setIsIOS(/iphone|ipad|ipod/.test(lowerUa));
+    setIsInAppBrowser(detectInAppBrowser(ua));
+    try {
+      setIsInIframe(window.self !== window.top);
+    } catch {
+      setIsInIframe(true);
+    }
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
-    };
+    return unsub;
   }, []);
 
   const install = async () => {
-    if (!deferredPrompt) return false;
-    await deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setIsInstalled(true);
-      setDeferredPrompt(null);
-      return true;
-    }
-    return false;
+    return triggerPWAInstallPrompt();
   };
 
   return {
-    isInstallable: Boolean(deferredPrompt),
+    isInstallable,
     isInstalled,
     isIOS,
+    isInAppBrowser,
+    isInIframe,
     install,
   };
 }

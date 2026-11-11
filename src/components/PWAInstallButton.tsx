@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Share, X, Smartphone } from 'lucide-react';
+import { Download, Share, X, Smartphone, ExternalLink, Copy, Check } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
 interface PWAInstallButtonProps {
@@ -13,8 +13,10 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   variant = 'outline',
   accentColor,
 }) => {
-  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
+  const { isInstallable, isInstalled, isIOS, isInAppBrowser, isInIframe, install } =
+    usePWAInstall();
   const [showGuideModal, setShowGuideModal] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
 
   if (isInstalled) {
     return null;
@@ -24,10 +26,20 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
 
   const handleClick = async () => {
     if (isInstallable) {
-      await install();
-      return;
+      const accepted = await install();
+      if (accepted) return;
     }
     setShowGuideModal(true);
+  };
+
+  const handleCopyCurrentUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopiedUrl(true);
+      setTimeout(() => setCopiedUrl(false), 2000);
+    } catch {
+      // Clipboard ignored
+    }
   };
 
   const buttonClasses =
@@ -82,9 +94,34 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
               </button>
             </div>
 
-            {isIOS ? (
+            {isInAppBrowser || isInIframe ? (
+              <div className="mt-4 space-y-3 text-xs leading-relaxed text-zinc-700">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-950">
+                  Estás viendo la tienda desde un navegador integrado (como WhatsApp, Instagram o vista previa). Para instalar la app en tu celular, abrila directamente en <strong>Google Chrome</strong> (Android) o <strong>Safari</strong> (iPhone).
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyCurrentUrl}
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800 hover:bg-zinc-50 cursor-pointer"
+                  >
+                    {copiedUrl ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                    <span>{copiedUrl ? 'Enlace copiado' : 'Copiar enlace'}</span>
+                  </button>
+                  <a
+                    href={window.location.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-medium text-zinc-800 hover:bg-zinc-100"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    <span>Abrir afuera</span>
+                  </a>
+                </div>
+              </div>
+            ) : isIOS ? (
               <div className="mt-4 space-y-2.5 text-sm text-zinc-600">
-                <p>En iPhone o iPad con Safari:</p>
+                <p className="text-xs text-zinc-700">En iPhone o iPad con Safari:</p>
                 <ol className="list-decimal space-y-1.5 pl-4 text-xs leading-relaxed text-zinc-700">
                   <li>
                     Tocá el botón <strong className="inline-flex items-center gap-1 font-semibold text-zinc-900"><Share className="h-3.5 w-3.5" /> Compartir</strong> en la barra de Safari.
@@ -101,8 +138,8 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
                   Para instalar esta tienda como aplicación en tu dispositivo:
                 </p>
                 <ol className="list-decimal space-y-1.5 pl-4 text-xs leading-relaxed text-zinc-700">
-                  <li>Abrí el menú del navegador (Chrome o Edge).</li>
-                  <li>Seleccioná <strong className="font-semibold text-zinc-900">Instalar aplicación</strong> o <strong className="font-semibold text-zinc-900">Agregar a la pantalla principal</strong>.</li>
+                  <li>Abrí esta página en <strong>Google Chrome</strong> o <strong>Edge</strong> (no en modo incógnito).</li>
+                  <li>Tocá el menú <strong>⋮</strong> del navegador y seleccioná <strong className="font-semibold text-zinc-900">Instalar aplicación</strong> o <strong className="font-semibold text-zinc-900">Agregar a la pantalla principal</strong>.</li>
                 </ol>
               </div>
             )}
