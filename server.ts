@@ -532,11 +532,13 @@ async function startServer() {
         ];
 
     const startUrl = rawSlug ? `/?store=${encodeURIComponent(rawSlug)}` : '/';
+    const appId = rawSlug ? `/?store=${encodeURIComponent(rawSlug)}` : '/';
+
     res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.json({
-      id: startUrl,
+      id: appId,
       name,
       short_name: shortName,
       description,

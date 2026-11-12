@@ -35,8 +35,17 @@
         try {
           var s = new URLSearchParams(window.location.search).get('store');
           if (s) {
+            var slug = encodeURIComponent(s.trim().toLowerCase());
             var l = document.querySelector('link[rel="manifest"]');
-            if (l) l.setAttribute('href', '/api/manifest/' + encodeURIComponent(s.trim().toLowerCase()));
+            var targetHref = '/api/manifest/' + slug;
+            if (l) {
+              l.setAttribute('href', targetHref);
+            } else {
+              var newL = document.createElement('link');
+              newL.rel = 'manifest';
+              newL.href = targetHref;
+              document.head.appendChild(newL);
+            }
           }
         } catch (e) {}
       })();

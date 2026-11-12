@@ -178,6 +178,8 @@ export default async function handler(
       ];
 
   const startUrl = rawSlug ? `/?store=${encodeURIComponent(rawSlug)}` : '/';
+  // Unique PWA identity per store so Android Chrome & mobile OS treat each store as a separate app
+  const appId = rawSlug ? `/?store=${encodeURIComponent(rawSlug)}` : '/';
 
   res.statusCode = 200;
   res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
@@ -185,7 +187,7 @@ export default async function handler(
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.end(
     JSON.stringify({
-      id: startUrl,
+      id: appId,
       name,
       short_name: shortName,
       description,
