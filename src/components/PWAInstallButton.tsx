@@ -6,12 +6,14 @@ interface PWAInstallButtonProps {
   storeName?: string;
   variant?: 'solid' | 'outline';
   accentColor?: string;
+  darkSurface?: boolean;
 }
 
 export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   storeName,
   variant = 'outline',
   accentColor,
+  darkSurface = false,
 }) => {
   const { isInstallable, isInstalled, isIOS, isInAppBrowser, isInIframe, install } =
     usePWAInstall();
@@ -45,7 +47,9 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   const buttonClasses =
     variant === 'solid'
       ? 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold text-white transition-transform active:scale-[0.98] whitespace-nowrap shrink-0 cursor-pointer'
-      : 'inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-xs font-medium text-zinc-800 hover:bg-zinc-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer';
+      : darkSurface
+        ? 'inline-flex items-center gap-2 rounded-lg border border-white/15 bg-zinc-900 px-3.5 py-2 text-xs font-medium text-zinc-100 hover:bg-zinc-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer'
+        : 'inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-xs font-medium text-zinc-800 hover:bg-zinc-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer';
 
   const style =
     variant === 'solid'

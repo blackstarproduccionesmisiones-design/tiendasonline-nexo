@@ -1,5 +1,7 @@
 import type { Timestamp } from 'firebase/firestore';
 
+export type BackgroundTexture = 'none' | 'dots' | 'grid' | 'diagonal' | 'grain' | 'carbon';
+
 export interface Store {
   id: string;
   slug: string;
@@ -12,6 +14,9 @@ export interface Store {
   logoUrl?: string;
   appIconUrl?: string;
   accentColor?: string;
+  backgroundColor?: string;
+  backgroundTexture?: BackgroundTexture;
+  backgroundImageUrl?: string;
   isActive: boolean;
   ownerUid: string;
   createdAt?: Timestamp | string;

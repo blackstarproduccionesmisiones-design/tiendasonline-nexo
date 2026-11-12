@@ -111,6 +111,7 @@ async function fetchStoreForManifest(slug: string): Promise<{
   name: string;
   description: string;
   accentColor: string;
+  backgroundColor: string;
   appIconUrl: string;
   logoUrl: string;
 } | null> {
@@ -133,6 +134,7 @@ async function fetchStoreForManifest(slug: string): Promise<{
             fields.description?.stringValue ||
             'Catálogo online y pedidos por WhatsApp.',
           accentColor: fields.accentColor?.stringValue || '#0F172A',
+          backgroundColor: fields.backgroundColor?.stringValue || '#FAFAFA',
           appIconUrl: fields.appIconUrl?.stringValue || '',
           logoUrl: fields.logoUrl?.stringValue || '',
         };
@@ -184,6 +186,7 @@ async function fetchStoreForManifest(slug: string): Promise<{
         fields.description?.stringValue ||
         'Catálogo online y pedidos por WhatsApp.',
       accentColor: fields.accentColor?.stringValue || '#0F172A',
+      backgroundColor: fields.backgroundColor?.stringValue || '#FAFAFA',
       appIconUrl: fields.appIconUrl?.stringValue || '',
       logoUrl: fields.logoUrl?.stringValue || '',
     };
@@ -481,11 +484,15 @@ async function startServer() {
     const fallbackTheme = typeof req.query.theme === 'string' && /^#[0-9a-fA-F]{6}$/.test(req.query.theme)
       ? req.query.theme
       : '#0F172A';
+    const fallbackBg = typeof req.query.bg === 'string' && /^#[0-9a-fA-F]{6}$/.test(req.query.bg)
+      ? req.query.bg
+      : '#FAFAFA';
 
     const name = store?.name || fallbackName;
     const shortName = name.slice(0, 12).trim() || 'Tienda';
     const description = store?.description || 'Catálogo digital y pedidos por WhatsApp.';
     const themeColor = store?.accentColor || fallbackTheme;
+    const backgroundColor = store?.backgroundColor || fallbackBg;
     const rawIcon = store?.appIconUrl || store?.logoUrl || fallbackIcon;
     const useCustomCloudinaryIcon = Boolean(rawIcon && isCloudinaryUploadUrl(rawIcon));
 
@@ -547,7 +554,7 @@ async function startServer() {
       display: 'standalone',
       prefer_related_applications: false,
       theme_color: themeColor,
-      background_color: '#FAFAFA',
+      background_color: backgroundColor,
       icons,
     });
   });

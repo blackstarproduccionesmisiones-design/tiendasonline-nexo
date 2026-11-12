@@ -24,6 +24,7 @@ async function fetchStoreForManifest(slug: string): Promise<{
   name: string;
   description: string;
   accentColor: string;
+  backgroundColor: string;
   appIconUrl: string;
   logoUrl: string;
 } | null> {
@@ -47,6 +48,7 @@ async function fetchStoreForManifest(slug: string): Promise<{
           description:
             fields.description?.stringValue || 'Catálogo online y pedidos por WhatsApp.',
           accentColor: fields.accentColor?.stringValue || '#0F172A',
+          backgroundColor: fields.backgroundColor?.stringValue || '#FAFAFA',
           appIconUrl: fields.appIconUrl?.stringValue || '',
           logoUrl: fields.logoUrl?.stringValue || '',
         };
@@ -97,6 +99,7 @@ async function fetchStoreForManifest(slug: string): Promise<{
       description:
         fields.description?.stringValue || 'Catálogo online y pedidos por WhatsApp.',
       accentColor: fields.accentColor?.stringValue || '#0F172A',
+      backgroundColor: fields.backgroundColor?.stringValue || '#FAFAFA',
       appIconUrl: fields.appIconUrl?.stringValue || '',
       logoUrl: fields.logoUrl?.stringValue || '',
     };
@@ -121,17 +124,21 @@ export default async function handler(
   const qName = url.searchParams.get('name');
   const qIcon = url.searchParams.get('icon');
   const qTheme = url.searchParams.get('theme');
+  const qBg = url.searchParams.get('bg');
 
   const fallbackName =
     qName && qName.trim() ? qName.trim().slice(0, 60) : 'NEXO+ Tienda';
   const fallbackIcon = qIcon && qIcon.startsWith('http') ? qIcon.trim() : '';
   const fallbackTheme =
     qTheme && /^#[0-9a-fA-F]{6}$/.test(qTheme) ? qTheme : '#0F172A';
+  const fallbackBg =
+    qBg && /^#[0-9a-fA-F]{6}$/.test(qBg) ? qBg : '#FAFAFA';
 
   const name = store?.name || fallbackName;
   const shortName = name.slice(0, 12).trim() || 'Tienda';
   const description = store?.description || 'Catálogo digital y pedidos por WhatsApp.';
   const themeColor = store?.accentColor || fallbackTheme;
+  const backgroundColor = store?.backgroundColor || fallbackBg;
   const rawIcon = store?.appIconUrl || store?.logoUrl || fallbackIcon;
   const useCustomCloudinaryIcon = Boolean(rawIcon && isCloudinaryUploadUrl(rawIcon));
 
@@ -196,7 +203,7 @@ export default async function handler(
       display: 'standalone',
       prefer_related_applications: false,
       theme_color: themeColor,
-      background_color: '#FAFAFA',
+      background_color: backgroundColor,
       icons,
     })
   );

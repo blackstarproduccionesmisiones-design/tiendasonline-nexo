@@ -31,7 +31,19 @@ import {
   X,
 } from 'lucide-react';
 import { auth, db, handleFirestoreError } from '../lib/firebase';
-import { OperationType, type Category, type Product, type Store } from '../types';
+import {
+  BACKGROUND_COLOR_PRESETS,
+  BACKGROUND_TEXTURE_PRESETS,
+  getContrastTextColor,
+  getStoreBackgroundStyle,
+} from '../lib/theme';
+import {
+  OperationType,
+  type BackgroundTexture,
+  type Category,
+  type Product,
+  type Store,
+} from '../types';
 import { ImageUploaderField } from './ImageUploaderField';
 import { ResilientImage } from './ResilientImage';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -125,6 +137,11 @@ export const StoreAdminPanel: React.FC<StoreAdminPanelProps> = ({
   const [bizLogo, setBizLogo] = useState(store.logoUrl || '');
   const [bizAppIcon, setBizAppIcon] = useState(store.appIconUrl || '');
   const [bizAccent, setBizAccent] = useState(store.accentColor || '#0F172A');
+  const [bizBgColor, setBizBgColor] = useState(store.backgroundColor || '#FAFAFA');
+  const [bizBgTexture, setBizBgTexture] = useState<BackgroundTexture>(
+    store.backgroundTexture || 'none'
+  );
+  const [bizBgImage, setBizBgImage] = useState(store.backgroundImageUrl || '');
   const [savingBiz, setSavingBiz] = useState(false);
   const [savedBizToast, setSavedBizToast] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -162,6 +179,9 @@ export const StoreAdminPanel: React.FC<StoreAdminPanelProps> = ({
     setBizLogo(store.logoUrl || '');
     setBizAppIcon(store.appIconUrl || '');
     setBizAccent(store.accentColor || '#0F172A');
+    setBizBgColor(store.backgroundColor || '#FAFAFA');
+    setBizBgTexture(store.backgroundTexture || 'none');
+    setBizBgImage(store.backgroundImageUrl || '');
   }, [store]);
 
   useEffect(() => {
@@ -514,6 +534,9 @@ export const StoreAdminPanel: React.FC<StoreAdminPanelProps> = ({
         logoUrl: bizLogo.trim(),
         appIconUrl: bizAppIcon.trim(),
         accentColor: bizAccent.trim() || '#0F172A',
+        backgroundColor: bizBgColor.trim() || '#FAFAFA',
+        backgroundTexture: bizBgTexture,
+        backgroundImageUrl: bizBgImage.trim(),
         updatedAt: serverTimestamp(),
       });
       setSavedBizToast(message);
@@ -1006,6 +1029,164 @@ export const StoreAdminPanel: React.FC<StoreAdminPanelProps> = ({
                     className="h-8 w-10 cursor-pointer rounded border border-zinc-200 bg-white p-0.5"
                     aria-label="Color personalizado"
                   />
+                </div>
+              </div>
+
+              {/* Independent Store Wallpaper / Background & Texture */}
+              <div className="space-y-4 border-t border-zinc-100 pt-6">
+                <div>
+                  <h2 className="font-display text-sm font-bold text-zinc-900">
+                    Fondo de pantalla de tu tienda y app
+                  </h2>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    Personalizá de forma independiente el fondo del catálogo online y de la app instalada con un tono claro, oscuro o texturado.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-800">
+                    Color de fondo
+                  </label>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {BACKGROUND_COLOR_PRESETS.map((preset) => {
+                      const active = bizBgColor.toLowerCase() === preset.hex.toLowerCase();
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => setBizBgColor(preset.hex)}
+                          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors whitespace-nowrap ${
+                            active
+                              ? 'border-zinc-900 bg-zinc-100 text-zinc-900'
+                              : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50'
+                          }`}
+                        >
+                          <span
+                            className="h-3.5 w-3.5 rounded-full border border-zinc-300"
+                            style={{ backgroundColor: preset.hex }}
+                          />
+                          <span>{preset.label}</span>
+                        </button>
+                      );
+                    })}
+                    <label className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-600 cursor-pointer">
+                      <span>Otro</span>
+                      <input
+                        type="color"
+                        value={/^#[0-9a-fA-F]{6}$/.test(bizBgColor) ? bizBgColor : '#FAFAFA'}
+                        onChange={(e) => setBizBgColor(e.target.value)}
+                        className="h-6 w-8 cursor-pointer rounded border-0 bg-transparent p-0"
+                        aria-label="Color de fondo personalizado"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-800">
+                    Textura o trama del fondo
+                  </label>
+                  <div className="mt-2 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+                    {BACKGROUND_TEXTURE_PRESETS.map((tex) => {
+                      const active = bizBgTexture === tex.id;
+                      const swatch = getStoreBackgroundStyle({
+                        backgroundColor: bizBgColor,
+                        backgroundTexture: tex.id,
+                      });
+                      return (
+                        <button
+                          key={tex.id}
+                          type="button"
+                          onClick={() => setBizBgTexture(tex.id)}
+                          className={`flex flex-col items-start rounded-xl border p-2 text-left transition-colors cursor-pointer ${
+                            active
+                              ? 'border-zinc-900 ring-1 ring-zinc-900 bg-zinc-50'
+                              : 'border-zinc-200 bg-white hover:border-zinc-300'
+                          }`}
+                        >
+                          <div
+                            className="h-10 w-full rounded-lg border border-black/10"
+                            style={swatch.style}
+                          />
+                          <span className="mt-1.5 text-xs font-semibold text-zinc-900">
+                            {tex.label}
+                          </span>
+                          <span className="line-clamp-1 text-[10px] text-zinc-500">
+                            {tex.description}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid gap-6 pt-2 lg:grid-cols-12 lg:items-start">
+                  <div className="lg:col-span-7">
+                    <ImageUploaderField
+                      label="Imagen o textura personalizada de fondo (opcional)"
+                      helperText="Si subís una foto o textura propia, reemplaza la trama con un velo automático para cuidar la lectura."
+                      value={bizBgImage}
+                      onChange={setBizBgImage}
+                      folder={`stores/${store.slug}/backgrounds`}
+                      previewAspect="wide"
+                    />
+                  </div>
+
+                  {/* Live Storefront Background Preview */}
+                  <div className="lg:col-span-5">
+                    {(() => {
+                      const previewTheme = getStoreBackgroundStyle({
+                        backgroundColor: bizBgColor,
+                        backgroundTexture: bizBgTexture,
+                        backgroundImageUrl: bizBgImage,
+                      });
+                      const btnText = getContrastTextColor(bizAccent);
+                      return (
+                        <div className="rounded-xl border border-zinc-200 p-3 bg-zinc-50">
+                          <p className="mb-2 text-[11px] font-semibold text-zinc-600">
+                            Vista previa de tu catálogo
+                          </p>
+                          <div
+                            className="rounded-lg border p-4 transition-colors"
+                            style={{
+                              ...previewTheme.style,
+                              borderColor: previewTheme.isDark
+                                ? 'rgba(255,255,255,0.12)'
+                                : 'rgba(9,9,11,0.08)',
+                            }}
+                          >
+                            <div
+                              className={`rounded-lg border p-3 shadow-xs ${
+                                previewTheme.isDark
+                                  ? 'border-zinc-800 bg-zinc-900/90 text-zinc-100'
+                                  : 'border-zinc-200 bg-white text-zinc-900'
+                              }`}
+                            >
+                              <p className="font-display text-xs font-bold truncate">
+                                {bizName || store.name}
+                              </p>
+                              <p
+                                className={`mt-0.5 text-[11px] ${
+                                  previewTheme.isDark ? 'text-zinc-400' : 'text-zinc-500'
+                                }`}
+                              >
+                                Producto de ejemplo · $24.500
+                              </p>
+                              <span
+                                className="mt-2 inline-block rounded-md px-2.5 py-1 text-[10px] font-semibold"
+                                style={{
+                                  backgroundColor: bizAccent || '#0F172A',
+                                  color: btnText,
+                                }}
+                              >
+                                Agregar al pedido
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
 

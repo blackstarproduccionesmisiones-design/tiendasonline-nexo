@@ -47,6 +47,7 @@ export function useDynamicStoreManifest(store: Store | null, routeSlug?: string 
     const iconUrl = store?.appIconUrl || store?.logoUrl || '';
     if (iconUrl && iconUrl.startsWith('http')) params.set('icon', iconUrl);
     if (store?.accentColor) params.set('theme', store.accentColor);
+    if (store?.backgroundColor) params.set('bg', store.backgroundColor);
 
     const qs = params.toString();
     const baseManifestUrl = `/api/manifest/${encodeURIComponent(effectiveSlug)}`;

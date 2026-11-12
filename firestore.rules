@@ -36,8 +36,9 @@ service cloud.firestore {
       return data.keys().hasAll(['id', 'slug', 'name', 'whatsapp', 'isActive', 'ownerUid', 'createdAt', 'updatedAt'])
         && data.keys().hasOnly([
           'id', 'slug', 'name', 'description', 'whatsapp', 'address', 'hours',
-          'bannerUrl', 'logoUrl', 'appIconUrl', 'accentColor', 'isActive',
-          'ownerUid', 'createdAt', 'updatedAt'
+          'bannerUrl', 'logoUrl', 'appIconUrl', 'accentColor',
+          'backgroundColor', 'backgroundTexture', 'backgroundImageUrl',
+          'isActive', 'ownerUid', 'createdAt', 'updatedAt'
         ])
         && data.id == storeId
         && isValidId(data.id)
@@ -51,6 +52,9 @@ service cloud.firestore {
         && (!('logoUrl' in data) || (data.logoUrl is string && data.logoUrl.size() <= 1000))
         && (!('appIconUrl' in data) || (data.appIconUrl is string && data.appIconUrl.size() <= 1000))
         && (!('accentColor' in data) || (data.accentColor is string && data.accentColor.size() <= 20))
+        && (!('backgroundColor' in data) || (data.backgroundColor is string && data.backgroundColor.size() <= 20))
+        && (!('backgroundTexture' in data) || (data.backgroundTexture is string && data.backgroundTexture.size() <= 30 && data.backgroundTexture in ['none', 'dots', 'grid', 'diagonal', 'grain', 'carbon']))
+        && (!('backgroundImageUrl' in data) || (data.backgroundImageUrl is string && data.backgroundImageUrl.size() <= 1000))
         && data.isActive is bool
         && isValidId(data.ownerUid)
         && data.createdAt is timestamp
@@ -159,7 +163,9 @@ service cloud.firestore {
             && existing().ownerUid == request.auth.uid
             && incoming().diff(existing()).affectedKeys().hasOnly([
               'name', 'description', 'whatsapp', 'address', 'hours',
-              'bannerUrl', 'logoUrl', 'appIconUrl', 'accentColor', 'updatedAt'
+              'bannerUrl', 'logoUrl', 'appIconUrl', 'accentColor',
+              'backgroundColor', 'backgroundTexture', 'backgroundImageUrl',
+              'updatedAt'
             ])
           )
         );
