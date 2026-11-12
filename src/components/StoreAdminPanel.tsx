@@ -696,11 +696,11 @@ export const StoreAdminPanel: React.FC<StoreAdminPanelProps> = ({
                       className="flex flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between hover:bg-zinc-50/70"
                     >
                       <div className="flex items-center gap-3.5 min-w-0">
-                        <div className="h-14 w-16 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100">
+                        <div className="h-14 w-16 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 flex items-center justify-center">
                           <ResilientImage
                             src={prod.imageUrl}
                             alt={prod.name}
-                            className="h-full w-full object-cover"
+                            className="h-full w-full object-contain p-0.5"
                           />
                         </div>
                         <div className="min-w-0">

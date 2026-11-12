@@ -1,14 +1,18 @@
 import React, { useMemo, useState } from 'react';
 import {
   Clock,
+  Eye,
   MapPin,
   MessageCircle,
   Minus,
   Plus,
+  RotateCcw,
   Search,
   ShoppingBag,
   Trash2,
   X,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import type { CartItem, Category, Product, Store } from '../types';
 import { DEMO_HERO_BANNER } from '../data/demoStore';
@@ -44,6 +48,20 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
+
+  // Product quick view & zoom modal
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  const [zoomScale, setZoomScale] = useState(1);
+
+  const openQuickView = (product: Product) => {
+    setQuickViewProduct(product);
+    setZoomScale(1);
+  };
+
+  const closeQuickView = () => {
+    setQuickViewProduct(null);
+    setZoomScale(1);
+  };
 
   // Checkout customer fields for WhatsApp message
   const [customerName, setCustomerName] = useState('');
@@ -380,13 +398,40 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({
                   key={product.id}
                   className="group flex flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
                 >
-                  <div className="aspect-[4/3] w-full overflow-hidden bg-zinc-100">
+                  {/* Clickable Image Container: Shows full uncropped image (object-contain) with subtle ambient backdrop and zoom icon */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openQuickView(product)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openQuickView(product);
+                      }
+                    }}
+                    className="relative aspect-[4/3] w-full overflow-hidden bg-zinc-100/90 cursor-zoom-in select-none group/img"
+                    title="Click para ampliar imagen y ver detalles"
+                  >
+                    {/* Blurred backdrop to blend edges smoothly for any image aspect ratio */}
+                    {product.imageUrl && (
+                      <div
+                        className="absolute inset-0 bg-cover bg-center opacity-15 blur-md scale-110"
+                        style={{ backgroundImage: `url(${product.imageUrl})` }}
+                        aria-hidden="true"
+                      />
+                    )}
                     <ResilientImage
                       src={product.imageUrl}
                       alt={product.name}
                       fallbackLabel={product.name}
-                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                      className="relative z-1 h-full w-full object-contain p-2 transition-transform duration-300 group-hover/img:scale-[1.03]"
                     />
+
+                    {/* Hover indicator to make zoom affordance unmistakable */}
+                    <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1 rounded-full bg-zinc-950/70 px-2.5 py-1 text-[11px] font-medium text-white shadow-sm backdrop-blur-xs opacity-0 transition-opacity duration-200 group-hover/img:opacity-100">
+                      <ZoomIn className="h-3 w-3" />
+                      <span>Ver foto</span>
+                    </div>
                   </div>
 
                   <div className="flex flex-1 flex-col justify-between p-5">
@@ -400,7 +445,10 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({
                           </>
                         )}
                       </div>
-                      <h2 className="mt-1 font-display text-base font-semibold text-zinc-900">
+                      <h2
+                        onClick={() => openQuickView(product)}
+                        className="mt-1 font-display text-base font-semibold text-zinc-900 cursor-pointer hover:text-zinc-700 transition-colors"
+                      >
                         {product.name}
                       </h2>
                       {product.description && (
@@ -662,6 +710,198 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({
                 </a>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Product Image Zoom & Details Modal */}
+      {quickViewProduct && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-3 sm:p-6 backdrop-blur-sm animate-in fade-in duration-200"
+          role="dialog"
+          aria-modal="true"
+          onClick={closeQuickView}
+        >
+          <div
+            className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-2xl sm:flex-row"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={closeQuickView}
+              className="absolute top-3 right-3 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white shadow-md backdrop-blur-xs hover:bg-black/80 transition-colors cursor-pointer sm:top-4 sm:right-4"
+              aria-label="Cerrar vista ampliada"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {/* Left / Top: Interactive Zoom Canvas (Complete uncropped image) */}
+            <div className="relative flex flex-1 flex-col items-center justify-center bg-zinc-950/95 overflow-hidden min-h-[280px] sm:min-h-[440px] select-none">
+              {/* Subtle ambient background glow */}
+              {quickViewProduct.imageUrl && (
+                <div
+                  className="absolute inset-0 bg-cover bg-center opacity-20 blur-xl scale-125"
+                  style={{ backgroundImage: `url(${quickViewProduct.imageUrl})` }}
+                  aria-hidden="true"
+                />
+              )}
+
+              {/* Main image with interactive zoom */}
+              <div
+                className="relative z-10 flex h-full w-full items-center justify-center p-4 overflow-auto cursor-zoom-in"
+                onClick={() => setZoomScale((prev) => (prev >= 2.5 ? 1 : prev + 0.75))}
+                title="Click en la imagen para aumentar zoom"
+              >
+                <img
+                  src={quickViewProduct.imageUrl || ''}
+                  alt={quickViewProduct.name}
+                  className="max-h-[55vh] sm:max-h-[460px] w-auto max-w-full object-contain transition-transform duration-200 ease-out drop-shadow-md"
+                  style={{ transform: `scale(${zoomScale})` }}
+                />
+              </div>
+
+              {/* Zoom control pill */}
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 rounded-full bg-zinc-900/85 px-3 py-1.5 text-xs text-white shadow-lg backdrop-blur-xs border border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setZoomScale((prev) => Math.max(1, Number((prev - 0.5).toFixed(2))))}
+                  disabled={zoomScale <= 1}
+                  className="p-1 text-zinc-300 hover:text-white disabled:opacity-40 cursor-pointer"
+                  title="Reducir zoom"
+                >
+                  <ZoomOut className="h-3.5 w-3.5" />
+                </button>
+                <span className="font-mono text-[11px] tabular-nums px-1.5 font-semibold">
+                  {Math.round(zoomScale * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setZoomScale((prev) => Math.min(3, Number((prev + 0.5).toFixed(2))))}
+                  disabled={zoomScale >= 3}
+                  className="p-1 text-zinc-300 hover:text-white disabled:opacity-40 cursor-pointer"
+                  title="Aumentar zoom"
+                >
+                  <ZoomIn className="h-3.5 w-3.5" />
+                </button>
+                {zoomScale !== 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setZoomScale(1)}
+                    className="ml-1 pl-1.5 border-l border-white/20 text-[11px] text-zinc-300 hover:text-white cursor-pointer"
+                    title="Restablecer tamaño normal"
+                  >
+                    <RotateCcw className="h-3 w-3 inline mr-1" />
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Right / Bottom: Details, Price, and Cart Controls */}
+            <div className="flex w-full flex-col justify-between p-6 sm:w-80 sm:border-l sm:border-zinc-200 bg-white">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-xs font-medium text-zinc-500">
+                  <span>{categoryMap.get(quickViewProduct.categoryId)?.name || 'Catálogo'}</span>
+                  {quickViewProduct.featured && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span className="text-zinc-800 font-semibold">Destacado</span>
+                    </>
+                  )}
+                </div>
+
+                <h3 className="font-display text-xl font-bold text-zinc-900 leading-tight">
+                  {quickViewProduct.name}
+                </h3>
+
+                <div className="pt-1">
+                  <span className="font-mono text-2xl font-bold text-zinc-900 tabular-nums">
+                    {formatPriceARS(quickViewProduct.price)}
+                  </span>
+                </div>
+
+                {quickViewProduct.description ? (
+                  <div className="border-t border-zinc-100 pt-3">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                      Descripción
+                    </h4>
+                    <p className="mt-1.5 text-xs sm:text-sm leading-relaxed text-zinc-600 whitespace-pre-line max-h-40 overflow-y-auto pr-1">
+                      {quickViewProduct.description}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="border-t border-zinc-100 pt-3">
+                    <p className="text-xs text-zinc-400 italic">
+                      Producto disponible para entrega o retiro inmediato.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Action buttons: Cart / Counter */}
+              <div className="mt-6 border-t border-zinc-100 pt-4 space-y-3">
+                {(() => {
+                  const inCart = cart.find((i) => i.product.id === quickViewProduct.id);
+                  return (
+                    <div className="space-y-2">
+                      {inCart ? (
+                        <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-2">
+                          <span className="text-xs font-medium text-zinc-700 pl-2">
+                            En tu pedido:
+                          </span>
+                          <div className="inline-flex items-center gap-1.5 bg-white border border-zinc-200 rounded-lg p-1">
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(quickViewProduct.id, -1)}
+                              className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-700 hover:bg-zinc-100 cursor-pointer"
+                              aria-label="Restar unidad"
+                            >
+                              <Minus className="h-4 w-4" />
+                            </button>
+                            <span className="min-w-[28px] text-center font-mono text-sm font-bold tabular-nums text-zinc-900">
+                              {inCart.quantity}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(quickViewProduct.id, 1)}
+                              className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-700 hover:bg-zinc-100 cursor-pointer"
+                              aria-label="Sumar unidad"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => addToCart(quickViewProduct)}
+                          className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white shadow-sm transition-transform active:scale-[0.98] cursor-pointer"
+                          style={{ backgroundColor: accent }}
+                        >
+                          <Plus className="h-4 w-4" />
+                          <span>Agregar al carrito</span>
+                        </button>
+                      )}
+
+                      {/* Button to open checkout directly */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!inCart) addToCart(quickViewProduct);
+                          closeQuickView();
+                          setCartOpen(true);
+                        }}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white py-2.5 text-xs font-medium text-zinc-800 hover:bg-zinc-50 transition-colors cursor-pointer"
+                      >
+                        <ShoppingBag className="h-3.5 w-3.5" />
+                        <span>Ver carrito ({cartCount})</span>
+                      </button>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
           </div>
         </div>
       )}
