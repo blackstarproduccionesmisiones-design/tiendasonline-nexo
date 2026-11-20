@@ -48,7 +48,7 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
               href="#comercios"
               className="hover:text-zinc-900 transition-colors whitespace-nowrap shrink-0"
             >
-              Comercios
+              Directorio de Tiendas
             </a>
             <a
               href="#capacidades"
@@ -95,7 +95,7 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
           <div className="flex flex-col justify-between lg:col-span-6">
             <div>
               <p className="text-xs font-medium tracking-wide text-zinc-500">
-                NEXO+ · Plataforma de Catálogos Digitales
+                NEXO+ · Plataforma de Catálogos Digitales y Directorio de Tiendas Online
               </p>
               <h1 className="mt-3 font-display text-3xl font-bold tracking-tight text-zinc-900 sm:text-5xl sm:leading-[1.08] text-balance">
                 Tu tienda online lista para vender por WhatsApp.
@@ -187,26 +187,38 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
         </div>
       </section>
 
-      {/* Active Stores Directory */}
-      <section id="comercios" className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h2 className="font-display text-2xl font-bold tracking-tight text-zinc-900">
-              Comercios disponibles
-            </h2>
-            <p className="mt-1 text-sm text-zinc-600">
-              Seleccioná una tienda para explorar su catálogo y realizar pedidos.
-            </p>
+      {/* Featured Stores Directory Section */}
+      <section
+        id="comercios"
+        className="border-t border-zinc-200 bg-zinc-100/70 py-12 sm:py-16"
+      >
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="rounded-2xl bg-zinc-900 px-6 py-6 text-white shadow-sm sm:px-8 sm:py-7">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
+                  Comercios disponibles
+                </p>
+                <h2 className="mt-1.5 font-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
+                  DIRECTORIO DE TIENDAS
+                </h2>
+                <p className="mt-1.5 max-w-2xl text-sm text-zinc-300">
+                  Seleccioná una tienda para explorar su catálogo y realizar pedidos.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 font-mono text-xs font-medium text-zinc-300 tabular-nums">
+                <StoreIcon className="h-4 w-4 text-zinc-400 shrink-0" />
+                <span>
+                  {activeStores.length > 0
+                    ? `${activeStores.length} ${activeStores.length === 1 ? 'tienda activa' : 'tiendas activas'}`
+                    : 'Vista previa de demostración'}
+                </span>
+              </div>
+            </div>
           </div>
-          <span className="font-mono text-xs text-zinc-500 tabular-nums">
-            {activeStores.length > 0
-              ? `${activeStores.length} ${activeStores.length === 1 ? 'tienda activa' : 'tiendas activas'}`
-              : 'Vista previa de demostración'}
-          </span>
-        </div>
 
-        {loading ? (
-          <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {loading ? (
+            <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
@@ -214,8 +226,8 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
               />
             ))}
           </div>
-        ) : (
-          <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          ) : (
+            <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {displayStores.map((store) => (
               <article
                 key={store.id}
@@ -268,9 +280,10 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
                   </div>
                 </div>
               </article>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </section>
 
       <footer className="border-t border-zinc-200 bg-white py-8">
