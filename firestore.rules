@@ -117,6 +117,19 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function isValidStoreRequest(data, requestId) {
+      return data.keys().hasAll(['id', 'storeName', 'category', 'fullName', 'phone', 'status', 'createdAt'])
+        && data.keys().hasOnly(['id', 'storeName', 'category', 'fullName', 'phone', 'status', 'createdAt'])
+        && data.id == requestId
+        && isValidId(data.id)
+        && data.storeName is string && data.storeName.size() >= 2 && data.storeName.size() <= 100
+        && data.category is string && data.category.size() >= 2 && data.category.size() <= 80
+        && data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 100
+        && data.phone is string && data.phone.size() >= 6 && data.phone.size() <= 30
+        && data.status is string && data.status in ['pending', 'contacted', 'created']
+        && data.createdAt is timestamp;
+    }
+
     match /admins/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId || isAdminEmail());
       allow list: if isAdminEmail();
@@ -259,6 +272,22 @@ service cloud.firestore {
         && isValidStoreAccount(incoming(), storeId)
         && incoming().createdAt == existing().createdAt;
       allow delete: if isAdmin() && isValidId(storeId);
+    }
+
+    match /storeRequests/{requestId} {
+      allow get: if isAdmin() && isValidId(requestId);
+      allow list: if isAdminEmail();
+      allow create: if isValidId(requestId)
+        && isValidStoreRequest(incoming(), requestId)
+        && incoming().status == 'pending'
+        && incoming().createdAt == request.time;
+      allow update: if isAdmin()
+        && isValidId(requestId)
+        && isValidStoreRequest(incoming(), requestId)
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+      allow delete: if isAdmin() && isValidId(requestId);
     }
   }
 }

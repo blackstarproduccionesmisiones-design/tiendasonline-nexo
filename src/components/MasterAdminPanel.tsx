@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -15,18 +16,27 @@ import {
   Copy,
   ExternalLink,
   Image as ImageIcon,
+  Inbox,
   Link2,
   Loader2,
   LogOut,
+  Phone,
   Plus,
   Search,
   Settings2,
   ShieldCheck,
   Store as StoreIcon,
+  Trash2,
   X,
 } from 'lucide-react';
 import { auth, db, firebaseApiKey, handleFirestoreError } from '../lib/firebase';
-import { OperationType, type Store, type StoreAccount } from '../types';
+import {
+  OperationType,
+  type Store,
+  type StoreAccount,
+  type StoreRequest,
+  type StoreRequestStatus,
+} from '../types';
 
 function createSlugFromName(input: string): string {
   const base = input
@@ -192,6 +202,9 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
   const [cloudinaryMsg, setCloudinaryMsg] = useState<string | null>(null);
   const [cloudinaryErr, setCloudinaryErr] = useState<string | null>(null);
 
+  // Incoming public store creation requests
+  const [storeRequests, setStoreRequests] = useState<StoreRequest[]>([]);
+
   useEffect(() => {
     const unsubStores = onSnapshot(
       collection(db, 'stores'),
@@ -221,6 +234,18 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
       }
     );
 
+    const unsubRequests = onSnapshot(
+      collection(db, 'storeRequests'),
+      (snap) => {
+        const list = snap.docs.map((d) => d.data() as StoreRequest);
+        list.sort((a, b) => getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt));
+        setStoreRequests(list);
+      },
+      (err) => {
+        handleFirestoreError(err, OperationType.LIST, 'storeRequests');
+      }
+    );
+
     getDoc(doc(db, 'platformConfig', 'cloudinary'))
       .then((snap) => {
         if (snap.exists()) {
@@ -234,6 +259,7 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
     return () => {
       unsubStores();
       unsubAccounts();
+      unsubRequests();
     };
   }, []);
 
@@ -556,6 +582,34 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
     } finally {
       setSavingCloudinary(false);
     }
+  };
+
+  const handleUpdateRequestStatus = async (reqId: string, nextStatus: StoreRequestStatus) => {
+    setStoreRequests((prev) =>
+      prev.map((r) => (r.id === reqId ? { ...r, status: nextStatus } : r))
+    );
+    try {
+      await updateDoc(doc(db, 'storeRequests', reqId), { status: nextStatus });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `storeRequests/${reqId}`);
+    }
+  };
+
+  const handleDeleteRequest = async (reqId: string) => {
+    setStoreRequests((prev) => prev.filter((r) => r.id !== reqId));
+    try {
+      await deleteDoc(doc(db, 'storeRequests', reqId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `storeRequests/${reqId}`);
+    }
+  };
+
+  const handlePrefillFromRequest = (req: StoreRequest) => {
+    setName(req.storeName);
+    setCustomSlug(createSlugFromName(req.storeName));
+    setSlugTouched(false);
+    setWhatsapp(req.phone.replace(/[^\d]/g, ''));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const filteredStores = stores.filter((s) => {
@@ -997,6 +1051,109 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </div>
+
+            {/* Incoming Store Creation Requests */}
+            <div className="mt-6 rounded-xl border border-zinc-200 bg-white">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-5 py-4">
+                <div className="flex items-center gap-2.5">
+                  <Inbox className="h-4 w-4 text-zinc-700" />
+                  <div>
+                    <h2 className="font-display text-base font-bold text-zinc-900">
+                      Solicitudes de CREAR TIENDA
+                    </h2>
+                    <p className="text-xs text-zinc-500">
+                      Consultas enviadas desde el formulario al pie de la página principal.
+                    </p>
+                  </div>
+                </div>
+                <span className="font-mono text-xs text-zinc-500 tabular-nums">
+                  {storeRequests.filter((r) => r.status === 'pending').length} pendientes
+                </span>
+              </div>
+
+              {storeRequests.length === 0 ? (
+                <div className="p-8 text-center text-xs text-zinc-500">
+                  Todavía no hay solicitudes nuevas desde el formulario público.
+                </div>
+              ) : (
+                <div className="divide-y divide-zinc-100">
+                  {storeRequests.map((req) => (
+                    <div
+                      key={req.id}
+                      className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span
+                            className={
+                              req.status === 'pending'
+                                ? 'font-semibold text-amber-700'
+                                : req.status === 'contacted'
+                                  ? 'font-semibold text-sky-700'
+                                  : 'font-semibold text-emerald-700'
+                            }
+                          >
+                            {req.status === 'pending'
+                              ? 'Pendiente'
+                              : req.status === 'contacted'
+                                ? 'Contactada'
+                                : 'Tienda creada'}
+                          </span>
+                          <span className="text-zinc-300">·</span>
+                          <span className="font-medium text-zinc-600">{req.category}</span>
+                        </div>
+                        <h3 className="mt-0.5 truncate font-display text-sm font-semibold text-zinc-900">
+                          {req.storeName}
+                        </h3>
+                        <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-600">
+                          <span>{req.fullName}</span>
+                          <span className="inline-flex items-center gap-1 font-mono text-zinc-700">
+                            <Phone className="h-3 w-3 text-zinc-400" />
+                            {req.phone}
+                          </span>
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handlePrefillFromRequest(req)}
+                          className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800 cursor-pointer"
+                        >
+                          Cargar datos
+                        </button>
+                        {req.status === 'pending' && (
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateRequestStatus(req.id, 'contacted')}
+                            className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 cursor-pointer"
+                          >
+                            Contactada
+                          </button>
+                        )}
+                        {req.status !== 'created' && (
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateRequestStatus(req.id, 'created')}
+                            className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 cursor-pointer"
+                          >
+                            Creada
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRequest(req.id)}
+                          className="rounded-lg border border-zinc-200 bg-white p-1.5 text-zinc-500 hover:bg-red-50 hover:text-red-600 cursor-pointer"
+                          title="Eliminar solicitud"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

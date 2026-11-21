@@ -63,6 +63,18 @@ export interface CartItem {
   quantity: number;
 }
 
+export type StoreRequestStatus = 'pending' | 'contacted' | 'created';
+
+export interface StoreRequest {
+  id: string;
+  storeName: string;
+  category: string;
+  fullName: string;
+  phone: string;
+  status: StoreRequestStatus;
+  createdAt?: Timestamp | string;
+}
+
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',

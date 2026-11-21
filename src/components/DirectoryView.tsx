@@ -1,5 +1,19 @@
-import React from 'react';
-import { ArrowRight, Store as StoreIcon, MapPin, MessageCircle, Smartphone, ShieldCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import {
+  AlertCircle,
+  ArrowRight,
+  CheckCircle2,
+  Loader2,
+  Mail,
+  MapPin,
+  MessageCircle,
+  Send,
+  ShieldCheck,
+  Smartphone,
+  Store as StoreIcon,
+} from 'lucide-react';
+import { db } from '../lib/firebase';
 import type { Store } from '../types';
 import { DEMO_HERO_BANNER, DEMO_STORE } from '../data/demoStore';
 import { ResilientImage } from './ResilientImage';
@@ -26,6 +40,109 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
 }) => {
   const activeStores = stores.filter((s) => s.isActive);
   const displayStores = activeStores.length > 0 ? activeStores : [DEMO_STORE];
+
+  // Store creation contact request form state
+  const [reqStoreName, setReqStoreName] = useState('');
+  const [reqCategory, setReqCategory] = useState('');
+  const [reqFullName, setReqFullName] = useState('');
+  const [reqPhone, setReqPhone] = useState('');
+  const [reqSubmitting, setReqSubmitting] = useState(false);
+  const [reqError, setReqError] = useState<string | null>(null);
+  const [reqSuccess, setReqSuccess] = useState<{
+    emailSent: boolean;
+    mailtoHref: string;
+    storeName: string;
+  } | null>(null);
+
+  const handleSubmitStoreRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setReqError(null);
+
+    const storeName = reqStoreName.trim();
+    const category = reqCategory.trim();
+    const fullName = reqFullName.trim();
+    const phone = reqPhone.trim();
+
+    if (storeName.length < 2 || storeName.length > 100) {
+      setReqError('Ingresá el nombre de la tienda (mínimo 2 caracteres).');
+      return;
+    }
+    if (category.length < 2 || category.length > 80) {
+      setReqError('Ingresá el rubro de tu comercio (mínimo 2 caracteres).');
+      return;
+    }
+    if (fullName.length < 2 || fullName.length > 100) {
+      setReqError('Ingresá tu nombre y apellido.');
+      return;
+    }
+    if (phone.replace(/[^\d+]/g, '').length < 6 || phone.length > 30) {
+      setReqError('Ingresá un número de teléfono o WhatsApp válido.');
+      return;
+    }
+
+    setReqSubmitting(true);
+    const requestId = `req_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+
+    try {
+      await setDoc(doc(db, 'storeRequests', requestId), {
+        id: requestId,
+        storeName,
+        category,
+        fullName,
+        phone,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+
+      let emailSent = false;
+      try {
+        const res = await fetch('/api/store-requests', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            requestId,
+            storeName,
+            category,
+            fullName,
+            phone,
+          }),
+        });
+        const raw = await res.text();
+        if (res.ok && raw) {
+          const parsed = JSON.parse(raw) as { emailSent?: boolean };
+          emailSent = Boolean(parsed.emailSent);
+        }
+      } catch {
+        emailSent = false;
+      }
+
+      const subject = encodeURIComponent(`Solicitud CREAR TIENDA: ${storeName} (${category})`);
+      const body = encodeURIComponent(
+        [
+          'Hola equipo de NEXO+, quiero solicitar la creación de una tienda:',
+          '',
+          `Nombre de la tienda: ${storeName}`,
+          `Rubro: ${category}`,
+          `Nombre y apellido: ${fullName}`,
+          `Tel: ${phone}`,
+        ].join('\n')
+      );
+
+      setReqSuccess({
+        emailSent,
+        mailtoHref: `mailto:nexodigitalposadas@gmail.com?subject=${subject}&body=${body}`,
+        storeName,
+      });
+      setReqStoreName('');
+      setReqCategory('');
+      setReqFullName('');
+      setReqPhone('');
+    } catch {
+      setReqError('No pudimos enviar la solicitud en este momento. Intentá nuevamente o escribinos por correo.');
+    } finally {
+      setReqSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] text-zinc-900">
@@ -55,6 +172,12 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
               className="hover:text-zinc-900 transition-colors whitespace-nowrap shrink-0"
             >
               Plataforma
+            </a>
+            <a
+              href="#crear-tienda"
+              className="hover:text-zinc-900 transition-colors whitespace-nowrap shrink-0"
+            >
+              Crear Tienda
             </a>
             <button
               type="button"
@@ -286,17 +409,218 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
         </div>
       </section>
 
-      <footer className="border-t border-zinc-200 bg-white py-8">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 text-xs text-zinc-500 sm:px-6">
-          <span>NEXO+ · Plataforma de Comercios Online</span>
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={currentUserEmail ? onOpenDashboard : onOpenAuth}
-              className="hover:text-zinc-900 transition-colors cursor-pointer"
-            >
-              Panel de administración
-            </button>
+      {/* Footer Segment: Solicitar CREAR TIENDA */}
+      <footer id="crear-tienda" className="border-t border-zinc-200 bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16">
+          <div className="grid items-start gap-10 lg:grid-cols-12">
+            <div className="lg:col-span-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                Sumate a NEXO+
+              </p>
+              <h2 className="mt-2 font-display text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">
+                CREAR TIENDA
+              </h2>
+              <p className="mt-3 text-sm leading-relaxed text-zinc-600">
+                ¿Querés tener tu propio catálogo digital en el directorio? Completá el formulario y enviamos tu solicitud directamente al administrador maestro para activar tu tienda.
+              </p>
+
+              <div className="mt-6 space-y-3 border-t border-zinc-200 pt-5 text-xs text-zinc-600">
+                <div className="flex items-center gap-2.5">
+                  <StoreIcon className="h-4 w-4 text-zinc-800 shrink-0" />
+                  <span>Enlace único para compartir en redes y WhatsApp</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Smartphone className="h-4 w-4 text-zinc-800 shrink-0" />
+                  <span>App instalable en el celular con logo e ícono propios</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Mail className="h-4 w-4 text-zinc-800 shrink-0" />
+                  <span>
+                    Recepción directa:{' '}
+                    <a
+                      href="mailto:nexodigitalposadas@gmail.com"
+                      className="font-medium text-zinc-900 underline underline-offset-2 hover:text-zinc-700"
+                    >
+                      nexodigitalposadas@gmail.com
+                    </a>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-7">
+              <div className="rounded-2xl border border-zinc-200 bg-[#FAFAFA] p-6 sm:p-8">
+                {reqSuccess ? (
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
+                      <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
+                      <div>
+                        <p className="font-display text-sm font-bold">
+                          Solicitud recibida para "{reqSuccess.storeName}"
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-emerald-900">
+                          {reqSuccess.emailSent
+                            ? 'Enviamos tus datos por correo a nexodigitalposadas@gmail.com y quedaron registrados en el panel administrador. Nos pondremos en contacto a la brevedad.'
+                            : 'Tus datos quedaron registrados para el administrador maestro (nexodigitalposadas@gmail.com). Si querés, también podés enviar una copia inmediata desde tu correo.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      {!reqSuccess.emailSent && (
+                        <a
+                          href={reqSuccess.mailtoHref}
+                          className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-xs font-semibold text-white hover:bg-zinc-800 transition-colors"
+                        >
+                          <Mail className="h-3.5 w-3.5" />
+                          <span>Enviar copia por correo</span>
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setReqSuccess(null)}
+                        className="rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-xs font-medium text-zinc-800 hover:bg-zinc-50 transition-colors cursor-pointer"
+                      >
+                        Enviar otra solicitud
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSubmitStoreRequest} className="space-y-4">
+                    <div>
+                      <h3 className="font-display text-base font-bold text-zinc-900">
+                        Solicitar alta de tienda
+                      </h3>
+                      <p className="mt-0.5 text-xs text-zinc-500">
+                        Completá los 4 datos para que te contactemos y configuremos tu catálogo.
+                      </p>
+                    </div>
+
+                    {reqError && (
+                      <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                        <span>{reqError}</span>
+                      </div>
+                    )}
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label
+                          htmlFor="req-store-name"
+                          className="block text-xs font-semibold uppercase tracking-wide text-zinc-800"
+                        >
+                          Nombre de la tienda
+                        </label>
+                        <input
+                          id="req-store-name"
+                          type="text"
+                          required
+                          minLength={2}
+                          maxLength={100}
+                          value={reqStoreName}
+                          onChange={(e) => setReqStoreName(e.target.value)}
+                          placeholder="Ej.: Almacén del Sur"
+                          className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="req-category"
+                          className="block text-xs font-semibold uppercase tracking-wide text-zinc-800"
+                        >
+                          Rubro
+                        </label>
+                        <input
+                          id="req-category"
+                          type="text"
+                          required
+                          minLength={2}
+                          maxLength={80}
+                          value={reqCategory}
+                          onChange={(e) => setReqCategory(e.target.value)}
+                          placeholder="Ej.: Indumentaria, Gastronomía, Bazar"
+                          className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="req-full-name"
+                          className="block text-xs font-semibold uppercase tracking-wide text-zinc-800"
+                        >
+                          Nombre y apellido
+                        </label>
+                        <input
+                          id="req-full-name"
+                          type="text"
+                          required
+                          minLength={2}
+                          maxLength={100}
+                          value={reqFullName}
+                          onChange={(e) => setReqFullName(e.target.value)}
+                          placeholder="Ej.: Juan Pérez"
+                          className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="req-phone"
+                          className="block text-xs font-semibold uppercase tracking-wide text-zinc-800"
+                        >
+                          Tel
+                        </label>
+                        <input
+                          id="req-phone"
+                          type="tel"
+                          required
+                          minLength={6}
+                          maxLength={30}
+                          value={reqPhone}
+                          onChange={(e) => setReqPhone(e.target.value)}
+                          placeholder="Ej.: +54 9 376 4000000"
+                          className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 font-mono text-sm text-zinc-900 placeholder:font-sans placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                      <span className="text-[11px] text-zinc-500">
+                        Se envía a nexodigitalposadas@gmail.com
+                      </span>
+                      <button
+                        type="submit"
+                        disabled={reqSubmitting}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60 transition-colors whitespace-nowrap cursor-pointer"
+                      >
+                        {reqSubmitting ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4" />
+                        )}
+                        <span>Solicitar CREAR TIENDA</span>
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-zinc-200 bg-zinc-50 py-6">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 text-xs text-zinc-500 sm:px-6">
+            <span>NEXO+ · Plataforma de Catálogos Digitales y Directorio de Tiendas Online</span>
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                onClick={currentUserEmail ? onOpenDashboard : onOpenAuth}
+                className="hover:text-zinc-900 transition-colors cursor-pointer"
+              >
+                Panel de administración
+              </button>
+            </div>
           </div>
         </div>
       </footer>
