@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Copy,
   ExternalLink,
+  FileText,
   Image as ImageIcon,
   Inbox,
   Link2,
@@ -205,6 +206,12 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
   // Incoming public store creation requests
   const [storeRequests, setStoreRequests] = useState<StoreRequest[]>([]);
 
+  // Optional Google Form URL for CREAR TIENDA footer (zero-variable email notifications via Google Forms)
+  const [googleFormUrl, setGoogleFormUrl] = useState('');
+  const [savingGoogleForm, setSavingGoogleForm] = useState(false);
+  const [googleFormMsg, setGoogleFormMsg] = useState<string | null>(null);
+  const [googleFormErr, setGoogleFormErr] = useState<string | null>(null);
+
   useEffect(() => {
     const unsubStores = onSnapshot(
       collection(db, 'stores'),
@@ -252,6 +259,15 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
           const data = snap.data() as { cloudName?: string; uploadPreset?: string };
           setCloudName(data.cloudName || '');
           setUploadPreset(data.uploadPreset || '');
+        }
+      })
+      .catch(() => undefined);
+
+    getDoc(doc(db, 'platformConfig', 'contactForm'))
+      .then((snap) => {
+        if (snap.exists()) {
+          const data = snap.data() as { googleFormUrl?: string };
+          setGoogleFormUrl(data.googleFormUrl || '');
         }
       })
       .catch(() => undefined);
@@ -581,6 +597,45 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
       handleFirestoreError(err, OperationType.WRITE, path);
     } finally {
       setSavingCloudinary(false);
+    }
+  };
+
+  const handleSaveGoogleForm = async (e: React.FormEvent, clear = false) => {
+    e.preventDefault();
+    setGoogleFormMsg(null);
+    setGoogleFormErr(null);
+
+    const cleanUrl = clear ? '' : googleFormUrl.trim();
+    if (
+      cleanUrl !== '' &&
+      !/^https:\/\/(docs\.google\.com\/forms\/|forms\.gle\/).+/.test(cleanUrl)
+    ) {
+      setGoogleFormErr(
+        'Pegá un enlace válido de Google Forms (debe comenzar con https://docs.google.com/forms/ o https://forms.gle/).'
+      );
+      return;
+    }
+
+    setSavingGoogleForm(true);
+    const path = 'platformConfig/contactForm';
+    try {
+      await setDoc(doc(db, 'platformConfig', 'contactForm'), {
+        id: 'contactForm',
+        googleFormUrl: cleanUrl,
+        updatedAt: serverTimestamp(),
+      });
+      if (clear) {
+        setGoogleFormUrl('');
+        setGoogleFormMsg('Se restableció el formulario nativo de NEXO+ en el pie de página.');
+      } else {
+        setGoogleFormMsg(
+          'Formulario de Google guardado. Ya se muestra en la sección CREAR TIENDA del inicio.'
+        );
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, path);
+    } finally {
+      setSavingGoogleForm(false);
     }
   };
 
@@ -923,6 +978,79 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({
                   {savingCloudinary && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   <span>Guardar configuración de imágenes</span>
                 </button>
+              </form>
+            </div>
+
+            {/* Google Form Configuration for CREAR TIENDA */}
+            <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-6">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-700">
+                  <FileText className="h-4 w-4" />
+                </div>
+                <div>
+                  <h2 className="font-display text-base font-bold text-zinc-900">
+                    Formulario de Google (CREAR TIENDA)
+                  </h2>
+                  <p className="mt-0.5 text-xs leading-relaxed text-zinc-600">
+                    Pegá el enlace de tu Formulario de Google para mostrarlo en el pie de página y recibir avisos en tu Gmail sin configurar variables.
+                  </p>
+                </div>
+              </div>
+
+              <ol className="mt-3 space-y-1 rounded-lg bg-zinc-50 p-3 text-[11px] leading-relaxed text-zinc-600">
+                <li>1. Creá el formulario en Google Forms (Nombre de tienda, Rubro, Nombre y Tel).</li>
+                <li>2. En Google Forms → <strong>Respuestas → ⋮</strong> activá <strong>Recibir notificaciones por correo electrónico</strong>.</li>
+                <li>3. Tocá <strong>Enviar → Enlace</strong> y pegá la URL completa acá abajo.</li>
+              </ol>
+
+              {googleFormErr && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                  <span>{googleFormErr}</span>
+                </div>
+              )}
+
+              {googleFormMsg && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
+                  <span>{googleFormMsg}</span>
+                </div>
+              )}
+
+              <form onSubmit={(e) => handleSaveGoogleForm(e, false)} className="mt-4 space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-800">
+                    Enlace de Google Forms
+                  </label>
+                  <input
+                    type="url"
+                    value={googleFormUrl}
+                    onChange={(e) => setGoogleFormUrl(e.target.value)}
+                    placeholder="https://docs.google.com/forms/d/e/.../viewform"
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none"
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="submit"
+                    disabled={savingGoogleForm}
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-xs font-semibold text-zinc-900 hover:bg-zinc-100 disabled:opacity-60 cursor-pointer"
+                  >
+                    {savingGoogleForm && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    <span>Guardar enlace</span>
+                  </button>
+                  {googleFormUrl && (
+                    <button
+                      type="button"
+                      disabled={savingGoogleForm}
+                      onClick={(e) => handleSaveGoogleForm(e, true)}
+                      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-50 cursor-pointer"
+                    >
+                      Usar nativo
+                    </button>
+                  )}
+                </div>
               </form>
             </div>
           </section>

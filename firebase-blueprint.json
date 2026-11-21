@@ -113,6 +113,17 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "storeName", "category", "fullName", "phone", "status", "createdAt"]
+    },
+    "ContactFormConfig": {
+      "title": "ContactFormConfig",
+      "description": "Public optional Google Form URL configured by Master Admin for the CREAR TIENDA footer section.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "googleFormUrl": { "type": "string", "maxLength": 1000 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "googleFormUrl", "updatedAt"]
     }
   },
   "firestore": {
@@ -122,7 +133,7 @@
     },
     "/platformConfig/{configId}": {
       "schema": { "$ref": "#/entities/CloudinaryConfig" },
-      "description": "Platform-wide public upload configuration managed by master administrator."
+      "description": "Platform-wide configuration (cloudinary for signed-in uploaders, contactForm publicly readable)."
     },
     "/stores/{storeId}": {
       "schema": { "$ref": "#/entities/Store" },

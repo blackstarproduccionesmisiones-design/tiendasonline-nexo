@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import React, { useEffect, useMemo, useState } from 'react';
+import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import {
   AlertCircle,
   ArrowRight,
   CheckCircle2,
+  ExternalLink,
   Loader2,
   Mail,
   MapPin,
@@ -40,6 +41,54 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
 }) => {
   const activeStores = stores.filter((s) => s.isActive);
   const displayStores = activeStores.length > 0 ? activeStores : [DEMO_STORE];
+
+  // Optional Google Form URL configured by Master Admin
+  const [googleFormUrl, setGoogleFormUrl] = useState('');
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(db, 'platformConfig', 'contactForm'),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data() as { googleFormUrl?: string };
+          setGoogleFormUrl((data.googleFormUrl || '').trim());
+        } else {
+          setGoogleFormUrl('');
+        }
+      },
+      () => {
+        // Keep built-in form fallback if unavailable
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  const parsedGoogleForm = useMemo(() => {
+    if (!googleFormUrl) return null;
+    try {
+      const parsed = new URL(googleFormUrl);
+      if (parsed.protocol !== 'https:') return null;
+      if (parsed.hostname === 'docs.google.com' && parsed.pathname.startsWith('/forms/')) {
+        const embed = new URL(parsed.toString());
+        embed.searchParams.set('embedded', 'true');
+        return {
+          mode: 'embed' as const,
+          directUrl: parsed.toString(),
+          embedUrl: embed.toString(),
+        };
+      }
+      if (parsed.hostname === 'forms.gle' && parsed.pathname.length > 1) {
+        return {
+          mode: 'link' as const,
+          directUrl: parsed.toString(),
+          embedUrl: '',
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }, [googleFormUrl]);
 
   // Store creation contact request form state
   const [reqStoreName, setReqStoreName] = useState('');
@@ -450,7 +499,52 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
 
             <div className="lg:col-span-7">
               <div className="rounded-2xl border border-zinc-200 bg-[#FAFAFA] p-6 sm:p-8">
-                {reqSuccess ? (
+                {parsedGoogleForm?.mode === 'embed' ? (
+                  <div className="space-y-3">
+                    <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
+                      <iframe
+                        src={parsedGoogleForm.embedUrl}
+                        title="Formulario para solicitar CREAR TIENDA"
+                        className="h-[680px] w-full border-0"
+                        loading="lazy"
+                      >
+                        Cargando formulario…
+                      </iframe>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
+                      <span>Formulario conectado directamente con Google Forms.</span>
+                      <a
+                        href={parsedGoogleForm.directUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-medium text-zinc-800 hover:text-zinc-950 underline underline-offset-2"
+                      >
+                        <span>Abrir en pestaña nueva</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
+                  </div>
+                ) : parsedGoogleForm?.mode === 'link' ? (
+                  <div className="space-y-4 py-4">
+                    <div>
+                      <h3 className="font-display text-lg font-bold text-zinc-900">
+                        Completar solicitud en Google Forms
+                      </h3>
+                      <p className="mt-1 text-sm leading-relaxed text-zinc-600">
+                        Ingresá el nombre de tu tienda, rubro, nombre y apellido y teléfono para recibir respuesta directa del equipo NEXO+.
+                      </p>
+                    </div>
+                    <a
+                      href={parsedGoogleForm.directUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-5 py-3 text-sm font-semibold text-white hover:bg-zinc-800 transition-colors"
+                    >
+                      <span>Abrir formulario CREAR TIENDA</span>
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  </div>
+                ) : reqSuccess ? (
                   <div className="space-y-4">
                     <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
                       <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />

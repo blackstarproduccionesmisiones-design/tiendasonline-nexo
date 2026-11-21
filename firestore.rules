@@ -130,6 +130,17 @@ service cloud.firestore {
         && data.createdAt is timestamp;
     }
 
+    function isValidContactFormConfig(data, configId) {
+      return data.keys().hasAll(['id', 'googleFormUrl', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'googleFormUrl', 'updatedAt'])
+        && data.id == configId
+        && isValidId(data.id)
+        && data.googleFormUrl is string
+        && data.googleFormUrl.size() <= 1000
+        && (data.googleFormUrl == '' || data.googleFormUrl.matches('^https://(docs\\.google\\.com/forms/|forms\\.gle/).+'))
+        && data.updatedAt is timestamp;
+    }
+
     match /admins/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId || isAdminEmail());
       allow list: if isAdminEmail();
@@ -137,20 +148,31 @@ service cloud.firestore {
     }
 
     match /platformConfig/{configId} {
-      allow get: if isValidId(configId) && configId == 'cloudinary' && isSignedIn();
-      allow create: if isAdmin()
-        && isValidId(configId)
-        && configId == 'cloudinary'
-        && isValidCloudinaryConfig(incoming(), configId)
-        && incoming().updatedAt == request.time;
+      allow get: if isValidId(configId) && (
+        (configId == 'cloudinary' && isSignedIn()) ||
+        configId == 'contactForm'
+      );
+      allow create: if isAdmin() && isValidId(configId) && incoming().updatedAt == request.time && (
+        (configId == 'cloudinary' && isValidCloudinaryConfig(incoming(), configId)) ||
+        (configId == 'contactForm' && isValidContactFormConfig(incoming(), configId))
+      );
       allow update: if isAdmin()
         && isValidId(configId)
-        && configId == 'cloudinary'
-        && isValidCloudinaryConfig(incoming(), configId)
         && incoming().id == existing().id
         && incoming().updatedAt == request.time
-        && incoming().diff(existing()).affectedKeys().hasOnly(['cloudName', 'uploadPreset', 'updatedAt']);
-      allow delete: if isAdmin() && isValidId(configId) && configId == 'cloudinary';
+        && (
+          (
+            configId == 'cloudinary'
+            && isValidCloudinaryConfig(incoming(), configId)
+            && incoming().diff(existing()).affectedKeys().hasOnly(['cloudName', 'uploadPreset', 'updatedAt'])
+          ) ||
+          (
+            configId == 'contactForm'
+            && isValidContactFormConfig(incoming(), configId)
+            && incoming().diff(existing()).affectedKeys().hasOnly(['googleFormUrl', 'updatedAt'])
+          )
+        );
+      allow delete: if isAdmin() && isValidId(configId) && (configId == 'cloudinary' || configId == 'contactForm');
     }
 
     match /stores/{storeId} {
